@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+
+data/student_images/
+data/model/
+data/attendance.csv
+app_backup.py
+data/students.csv
+yolo11n.pt
