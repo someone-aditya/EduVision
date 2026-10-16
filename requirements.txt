@@ -6,3 +6,4 @@ av
 opencv-contrib-python-headless
 deepface
 ultralytics
+lap>=0.5.12

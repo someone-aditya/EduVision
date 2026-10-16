@@ -107,7 +107,7 @@ FACE_MODEL = "Facenet512"
 FACE_MATCH_THRESHOLD = 0.30
 
 face_detector = cv2.CascadeClassifier(
-    cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+    os.path.join("assets", "haarcascade_frontalface_default.xml")
 )
 
 student_names = {}
