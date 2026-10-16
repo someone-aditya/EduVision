@@ -550,11 +550,7 @@ if page == "📋 Smart Attendance":
         video_processor_factory=AttendanceCamera,
 
         media_stream_constraints={
-    "video": {
-        "width": {"ideal": 1280},
-        "height": {"ideal": 720},
-        "frameRate": {"ideal": 24}
-    },
+    "video": True,
     "audio": False
 },
 
