@@ -345,13 +345,13 @@ class AttendanceProcessor(VideoProcessorBase):
 # ==========================================
 
 st.set_page_config(
-    page_title="VisionED AI",
+    page_title="EduVision",
     page_icon="🎓",
     layout="wide"
 )
 
 
-st.title("🎓 VisionED AI")
+st.title("🎓 EduVision")
 
 st.subheader(
     "📋 AI Smart Attendance"
