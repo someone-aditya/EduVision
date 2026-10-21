@@ -1,9 +1,11 @@
 streamlit
 streamlit-webrtc
 pandas
-numpy
+numpy<2.0
 av
-opencv-python-headless==4.13.0.92
+opencv-python-headless==4.10.0.84
 deepface
 ultralytics
 lap>=0.5.12
+qrcode[pil]
+Pillow
