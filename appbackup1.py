@@ -8,6 +8,7 @@ from ultralytics import YOLO
 from deepface import DeepFace
 import numpy as np
 from datetime import datetime
+import streamlit.components.v1 as components
 
 from streamlit_webrtc import VideoProcessorBase, WebRtcMode, webrtc_streamer
 
@@ -21,6 +22,38 @@ st.set_page_config(
     page_icon="🎓",
     layout="wide",
 )
+
+st.markdown("""
+<style>
+:root{--bg:#060914;--panel:rgba(15,23,42,.72);--line:rgba(148,163,184,.16)}
+.stApp{background:radial-gradient(circle at 15% 0%,rgba(59,130,246,.16),transparent 30%),radial-gradient(circle at 85% 5%,rgba(139,92,246,.14),transparent 28%),linear-gradient(180deg,#060914,#0b1220);color:#f8fafc}
+[data-testid="stSidebar"]{background:rgba(6,9,20,.96);border-right:1px solid var(--line)}
+[data-testid="stMetric"]{background:linear-gradient(145deg,rgba(15,23,42,.9),rgba(15,23,42,.58));border:1px solid var(--line);border-radius:20px;padding:18px;box-shadow:0 18px 50px rgba(0,0,0,.2);transition:.22s}
+[data-testid="stMetric"]:hover{transform:translateY(-4px);border-color:rgba(34,211,238,.5);box-shadow:0 20px 60px rgba(34,211,238,.08)}
+.ev-hero{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:28px;padding:36px;margin:2px 0 24px;background:linear-gradient(135deg,rgba(59,130,246,.17),rgba(139,92,246,.10)),rgba(15,23,42,.62);box-shadow:0 30px 90px rgba(0,0,0,.28)}
+.ev-hero:after{content:"";position:absolute;width:240px;height:240px;right:-70px;top:-100px;border-radius:50%;background:rgba(34,211,238,.16);filter:blur(25px);animation:pulse 4s ease-in-out infinite}
+.ev-kicker{display:inline-block;padding:7px 12px;border:1px solid rgba(34,211,238,.24);border-radius:999px;color:#a5f3fc;background:rgba(34,211,238,.07);font-size:12px;letter-spacing:.12em;font-weight:700}
+.ev-title{font-size:clamp(38px,5vw,64px);line-height:1;margin:18px 0 12px;font-weight:850;letter-spacing:-.045em;background:linear-gradient(90deg,#fff,#bae6fd 55%,#c4b5fd);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.ev-sub{color:#cbd5e1;max-width:760px;font-size:17px;line-height:1.65;margin-bottom:18px}
+.ev-live{display:flex;align-items:center;gap:8px;color:#bbf7d0;font-size:13px;font-weight:700}
+.ev-dot{width:9px;height:9px;border-radius:50%;background:#22c55e;animation:live 1.8s infinite}
+.stButton>button{border-radius:14px;border:1px solid rgba(34,211,238,.22);background:linear-gradient(135deg,#2563eb,#7c3aed);color:white;font-weight:750;min-height:44px;transition:.18s}
+.stButton>button:hover{transform:translateY(-2px) scale(1.01);box-shadow:0 12px 34px rgba(59,130,246,.22);color:white}
+h1,h2,h3{letter-spacing:-.025em}
+@keyframes pulse{50%{transform:scale(1.12);opacity:1}}
+@keyframes live{0%{box-shadow:0 0 0 0 rgba(34,197,94,.55)}70%{box-shadow:0 0 0 9px rgba(34,197,94,0)}}
+</style>
+""", unsafe_allow_html=True)
+
+components.html("""
+<div id="trail" style="position:fixed;width:16px;height:16px;border-radius:50%;background:rgba(34,211,238,.7);box-shadow:0 0 25px #22d3ee;pointer-events:none;z-index:999999"></div>
+<script>
+try{
+ const d=window.parent.document,t=document.getElementById('trail');
+ d.addEventListener('mousemove',e=>{t.style.left=(e.clientX-8)+'px';t.style.top=(e.clientY-8)+'px';});
+}catch(e){}
+</script>
+""", height=0)
 
 st.sidebar.title("🎓 EduVision")
 st.sidebar.write("Smart Classroom Management")
@@ -1148,20 +1181,15 @@ if page == "📊 Reports":
 # DASHBOARD
 # ==========================================
 
-st.title("🎓 EduVision")
-
-st.subheader(
-    "AI-Powered Smart Classroom Management System"
-)
-
-st.caption("Smarter Classrooms Through AI")
-
-current_time = datetime.now().strftime(
-    "%d %B %Y • %I:%M %p"
-)
-st.write(f"🕐 {current_time}")
-
-st.divider()
+current_time = datetime.now().strftime("%d %B %Y • %I:%M %p")
+st.markdown(f"""
+<div class="ev-hero">
+<div class="ev-kicker">✦ AI CLASSROOM OPERATING SYSTEM</div>
+<div class="ev-title">EduVision</div>
+<div class="ev-sub">AI-powered attendance, classroom occupancy and reporting in one premium smart-classroom dashboard.</div>
+<div class="ev-live"><span class="ev-dot"></span>SYSTEM ONLINE &nbsp; • &nbsp; {current_time}</div>
+</div>
+""", unsafe_allow_html=True)
 
 st.header("📊 Today's Classroom Overview")
 
