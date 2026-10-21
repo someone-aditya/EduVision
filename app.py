@@ -1196,17 +1196,20 @@ def attendance_page():
     # CAMERA
     # --------------------------------------------------------
 
-    with camera_tab:
+   with camera_tab:
 
-        camera_capture(
-            key="attendance_camera"
+    try:
+        from smart_attendance import render_page
+
+        render_page()
+
+    except Exception as error:
+
+        st.error(
+            "AI Attendance could not start."
         )
 
-        st.info(
-            "The current lightweight camera is stable browser "
-            "capture. Your face-recognition module can be connected "
-            "to this attendance section separately."
-        )
+        st.code(str(error))
 
     # --------------------------------------------------------
     # ATTENDANCE
