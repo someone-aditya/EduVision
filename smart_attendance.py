@@ -1,12 +1,13 @@
-import av
-import cv2
+import os
 import csv
 import json
-import os
 import threading
-
 from datetime import datetime
+from pathlib import Path
 
+import av
+import cv2
+import pandas as pd
 import streamlit as st
 
 from streamlit_webrtc import (
@@ -16,132 +17,405 @@ from streamlit_webrtc import (
 )
 
 
-# ==========================================
-# FILE LOCATIONS
-# ==========================================
+# ============================================================
+# PATHS
+# ============================================================
 
-MODEL_PATH = "data/model/face_model.yml"
-LABEL_PATH = "data/model/labels.json"
-STUDENTS_PATH = "data/students.csv"
-ATTENDANCE_PATH = "data/attendance.csv"
+BASE_DIR = Path(__file__).resolve().parent
+
+MODEL_PATH = BASE_DIR / "data" / "model" / "face_model.yml"
+LABEL_PATH = BASE_DIR / "data" / "model" / "labels.json"
+STUDENTS_PATH = BASE_DIR / "data" / "students.csv"
+ATTENDANCE_PATH = BASE_DIR / "data" / "attendance.csv"
 
 
-# ==========================================
-# LOAD STUDENT NAMES
-# ==========================================
+STUDENT_COLUMNS = [
+    "student_id",
+    "name",
+    "class_name",
+    "roll_no",
+    "status",
+]
+
+ATTENDANCE_COLUMNS = [
+    "student_id",
+    "name",
+    "class_name",
+    "date",
+    "time",
+    "status",
+]
+
+
+# ============================================================
+# GLOBAL DATA
+# ============================================================
 
 students = {}
+label_map = {}
 
-with open(STUDENTS_PATH, "r", newline="") as file:
-
-    reader = csv.DictReader(file)
-
-    for row in reader:
-
-        students[row["student_id"]] = row["name"]
-
-
-# ==========================================
-# LOAD LABEL MAP
-# ==========================================
-
-with open(LABEL_PATH, "r") as file:
-
-    raw_labels = json.load(file)
-
-
-# JSON converts integer keys to strings,
-# so convert them back.
-label_map = {
-    int(label): student_id
-    for label, student_id in raw_labels.items()
-}
-
-
-# ==========================================
-# LOAD FACE RECOGNITION MODEL
-# ==========================================
-
-recognizer = cv2.face.LBPHFaceRecognizer_create()
-
-recognizer.read(MODEL_PATH)
-
-
-# ==========================================
-# LOAD FACE DETECTOR
-# ==========================================
-
-face_detector = cv2.CascadeClassifier(
-    cv2.data.haarcascades
-    + "haarcascade_frontalface_default.xml"
-)
-
-
-# ==========================================
-# ATTENDANCE LOCK
-# ==========================================
+recognizer = None
+face_detector = None
 
 attendance_lock = threading.Lock()
 
 
-# ==========================================
+# ============================================================
+# LOAD STUDENTS
+# ============================================================
+
+def load_student_data():
+
+    global students
+
+    students = {}
+
+    if not STUDENTS_PATH.exists():
+        return
+
+    try:
+
+        df = pd.read_csv(
+            STUDENTS_PATH,
+            dtype=str
+        ).fillna("")
+
+        # Support older CSV
+        if (
+            "class" in df.columns
+            and
+            "class_name" not in df.columns
+        ):
+            df = df.rename(
+                columns={
+                    "class": "class_name"
+                }
+            )
+
+        for column in STUDENT_COLUMNS:
+
+            if column not in df.columns:
+                df[column] = ""
+
+        for _, row in df.iterrows():
+
+            student_id = str(
+                row.get(
+                    "student_id",
+                    ""
+                )
+            ).strip()
+
+            if not student_id:
+                continue
+
+            students[student_id] = {
+                "name": str(
+                    row.get(
+                        "name",
+                        student_id
+                    )
+                ),
+
+                "class_name": str(
+                    row.get(
+                        "class_name",
+                        ""
+                    )
+                )
+            }
+
+    except Exception as error:
+
+        print(
+            "Student loading error:",
+            error
+        )
+
+
+# ============================================================
+# LOAD LABELS
+# ============================================================
+
+def load_labels():
+
+    global label_map
+
+    label_map = {}
+
+    if not LABEL_PATH.exists():
+        return False
+
+    try:
+
+        with open(
+            LABEL_PATH,
+            "r",
+            encoding="utf-8"
+        ) as file:
+
+            raw_labels = json.load(
+                file
+            )
+
+        label_map = {
+            int(label): str(student_id)
+            for label, student_id
+            in raw_labels.items()
+        }
+
+        return True
+
+    except Exception as error:
+
+        print(
+            "Label loading error:",
+            error
+        )
+
+        return False
+
+
+# ============================================================
+# LOAD FACE MODEL
+# ============================================================
+
+def load_face_model():
+
+    global recognizer
+    global face_detector
+
+    if not hasattr(
+        cv2,
+        "face"
+    ):
+
+        return False
+
+    if not MODEL_PATH.exists():
+
+        return False
+
+    try:
+
+        recognizer = (
+            cv2.face
+            .LBPHFaceRecognizer_create()
+        )
+
+        recognizer.read(
+            str(MODEL_PATH)
+        )
+
+        # First try repository cascade
+        cascade_path = (
+            BASE_DIR
+            / "assets"
+            / "haarcascade_frontalface_default.xml"
+        )
+
+        if cascade_path.exists():
+
+            face_detector = (
+                cv2.CascadeClassifier(
+                    str(cascade_path)
+                )
+            )
+
+        else:
+
+            # Fallback to OpenCV's built-in path
+            face_detector = (
+                cv2.CascadeClassifier(
+                    cv2.data.haarcascades
+                    +
+                    "haarcascade_frontalface_default.xml"
+                )
+            )
+
+        if face_detector.empty():
+            return False
+
+        return True
+
+    except Exception as error:
+
+        print(
+            "Face model error:",
+            error
+        )
+
+        recognizer = None
+
+        return False
+
+
+# ============================================================
+# ATTENDANCE FILE
+# ============================================================
+
+def ensure_attendance_file():
+
+    ATTENDANCE_PATH.parent.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    if not ATTENDANCE_PATH.exists():
+
+        pd.DataFrame(
+            columns=ATTENDANCE_COLUMNS
+        ).to_csv(
+            ATTENDANCE_PATH,
+            index=False
+        )
+
+        return
+
+    try:
+
+        df = pd.read_csv(
+            ATTENDANCE_PATH,
+            dtype=str
+        ).fillna("")
+
+        if (
+            "class" in df.columns
+            and
+            "class_name" not in df.columns
+        ):
+
+            df = df.rename(
+                columns={
+                    "class": "class_name"
+                }
+            )
+
+        for column in ATTENDANCE_COLUMNS:
+
+            if column not in df.columns:
+                df[column] = ""
+
+        df[
+            ATTENDANCE_COLUMNS
+        ].to_csv(
+            ATTENDANCE_PATH,
+            index=False
+        )
+
+    except Exception:
+
+        pd.DataFrame(
+            columns=ATTENDANCE_COLUMNS
+        ).to_csv(
+            ATTENDANCE_PATH,
+            index=False
+        )
+
+
+# ============================================================
 # MARK ATTENDANCE
-# ==========================================
+# ============================================================
 
-def mark_attendance(student_id, name):
+def mark_attendance(
+    student_id,
+    name,
+    class_name=""
+):
 
-    today = datetime.now().strftime("%Y-%m-%d")
+    ensure_attendance_file()
+
+    today = datetime.now().strftime(
+        "%Y-%m-%d"
+    )
 
     with attendance_lock:
 
-        already_present = False
+        try:
 
-        # Check existing attendance
-        if os.path.exists(ATTENDANCE_PATH):
-
-            with open(
+            attendance = pd.read_csv(
                 ATTENDANCE_PATH,
-                "r",
-                newline=""
-            ) as file:
+                dtype=str
+            ).fillna("")
 
-                reader = csv.DictReader(file)
+        except Exception:
 
-                for row in reader:
+            attendance = pd.DataFrame(
+                columns=ATTENDANCE_COLUMNS
+            )
 
-                    if (
-                        row["student_id"] == student_id
-                        and row["date"] == today
-                    ):
+        for column in ATTENDANCE_COLUMNS:
 
-                        already_present = True
-                        break
+            if column not in attendance.columns:
+                attendance[column] = ""
 
-        # Don't mark same student twice
-        if already_present:
+        # Already marked today
+        if not attendance.empty:
 
-            return False
+            already_marked = (
+                (
+                    attendance[
+                        "student_id"
+                    ]
+                    ==
+                    str(student_id)
+                )
+                &
+                (
+                    attendance[
+                        "date"
+                    ]
+                    ==
+                    today
+                )
+            ).any()
+
+            if already_marked:
+
+                return False
 
         now = datetime.now()
 
-        date = now.strftime("%Y-%m-%d")
-        time = now.strftime("%H:%M:%S")
+        new_record = pd.DataFrame(
+            [
+                {
+                    "student_id":
+                        str(student_id),
 
-        with open(
+                    "name":
+                        str(name),
+
+                    "class_name":
+                        str(class_name),
+
+                    "date":
+                        today,
+
+                    "time":
+                        now.strftime(
+                            "%H:%M:%S"
+                        ),
+
+                    "status":
+                        "Present"
+                }
+            ]
+        )
+
+        attendance = pd.concat(
+            [
+                attendance[
+                    ATTENDANCE_COLUMNS
+                ],
+                new_record
+            ],
+            ignore_index=True
+        )
+
+        attendance.to_csv(
             ATTENDANCE_PATH,
-            "a",
-            newline=""
-        ) as file:
-
-            writer = csv.writer(file)
-
-            writer.writerow([
-                student_id,
-                name,
-                date,
-                time,
-                "Present"
-            ])
+            index=False
+        )
 
         print(
             f"Attendance marked: "
@@ -151,88 +425,147 @@ def mark_attendance(student_id, name):
         return True
 
 
-# ==========================================
+# ============================================================
 # VIDEO PROCESSOR
-# ==========================================
+# ============================================================
 
-class AttendanceProcessor(VideoProcessorBase):
+class AttendanceProcessor(
+    VideoProcessorBase
+):
 
     def __init__(self):
 
-        self.frame_counter = 0
+        # Consecutive recognition count
+        # for each student.
+        self.recognition_counts = {}
 
-        self.last_student = None
+        # Prevent repeatedly calling
+        # attendance for same person.
+        self.marked_this_session = set()
 
 
-    def recv(self, frame):
+    def recv(
+        self,
+        frame
+    ):
 
         img = frame.to_ndarray(
             format="bgr24"
         )
+
+        # Model unavailable
+        if (
+            recognizer is None
+            or
+            face_detector is None
+        ):
+
+            cv2.putText(
+                img,
+                "FACE MODEL NOT READY",
+                (20, 40),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (0, 0, 255),
+                2
+            )
+
+            return (
+                av.VideoFrame
+                .from_ndarray(
+                    img,
+                    format="bgr24"
+                )
+            )
 
         gray = cv2.cvtColor(
             img,
             cv2.COLOR_BGR2GRAY
         )
 
-        faces = face_detector.detectMultiScale(
-            gray,
-            scaleFactor=1.1,
-            minNeighbors=5,
-            minSize=(100, 100)
+        faces = (
+            face_detector
+            .detectMultiScale(
+                gray,
+                scaleFactor=1.1,
+                minNeighbors=6,
+                minSize=(
+                    100,
+                    100
+                )
+            )
         )
 
+        currently_seen = set()
 
-        for (x, y, w, h) in faces:
+        for (
+            x,
+            y,
+            w,
+            h
+        ) in faces:
 
             face = gray[
-                y:y+h,
-                x:x+w
+                y:y + h,
+                x:x + w
             ]
 
             face = cv2.resize(
                 face,
-                (200, 200)
+                (
+                    200,
+                    200
+                )
             )
 
+            try:
 
-            # ----------------------------------
-            # FACE RECOGNITION
-            # ----------------------------------
+                label, confidence = (
+                    recognizer.predict(
+                        face
+                    )
+                )
 
-            label, confidence = recognizer.predict(
-                face
-            )
-            cv2.putText(
-    img,
-    f"Distance: {confidence:.1f}",
-    (20, 40),
-    cv2.FONT_HERSHEY_SIMPLEX,
-    0.7,
-    (255, 255, 255),
-    2
-)
+            except Exception:
 
+                continue
 
             # LBPH:
-            # LOWER confidence value = better match.
-            #
-            # Start with 65 for our demo.
-            # We can tune this later.
-
-            if (
+            # lower distance = better.
+            recognized = (
                 confidence < 45
-                and label in label_map
-            ):
+                and
+                label in label_map
+            )
 
-                student_id = label_map[label]
+            if recognized:
 
-                name = students.get(
+                student_id = (
+                    label_map[
+                        label
+                    ]
+                )
+
+                student = students.get(
                     student_id,
+                    {}
+                )
+
+                name = student.get(
+                    "name",
                     student_id
                 )
 
-                display_name = name
+                class_name = (
+                    student.get(
+                        "class_name",
+                        ""
+                    )
+                )
+
+                display_name = (
+                    f"{name}"
+                )
 
                 box_color = (
                     0,
@@ -240,34 +573,44 @@ class AttendanceProcessor(VideoProcessorBase):
                     0
                 )
 
+                currently_seen.add(
+                    student_id
+                )
 
-                # ----------------------------------
-                # MARK ATTENDANCE
-                # ----------------------------------
+                count = (
+                    self.recognition_counts
+                    .get(
+                        student_id,
+                        0
+                    )
+                    +
+                    1
+                )
 
-                self.frame_counter += 1
+                self.recognition_counts[
+                    student_id
+                ] = count
 
-
-                # Require several recognized frames
-                # before marking attendance.
-
+                # Require repeated recognition
+                # before recording attendance.
                 if (
-                    self.last_student
-                    == student_id
+                    count >= 10
+                    and
+                    student_id
+                    not in
+                    self.marked_this_session
                 ):
 
-                    if self.frame_counter >= 10:
+                    mark_attendance(
+                        student_id,
+                        name,
+                        class_name
+                    )
 
-                     pass
+                    self.marked_this_session.add(
+                        student_id
+                    )
 
-                else:
-
-                    self.last_student = student_id
-
-                    self.frame_counter = 1
-
-
-                # Student ID
                 cv2.putText(
                     img,
                     student_id,
@@ -281,10 +624,11 @@ class AttendanceProcessor(VideoProcessorBase):
                     2
                 )
 
-
             else:
 
-                display_name = "UNKNOWN"
+                display_name = (
+                    "UNKNOWN"
+                )
 
                 box_color = (
                     0,
@@ -292,18 +636,13 @@ class AttendanceProcessor(VideoProcessorBase):
                     255
                 )
 
-                self.frame_counter = 0
-
-                self.last_student = None
-
-
-            # ----------------------------------
-            # FACE BOX
-            # ----------------------------------
-
+            # Face box
             cv2.rectangle(
                 img,
-                (x, y),
+                (
+                    x,
+                    y
+                ),
                 (
                     x + w,
                     y + h
@@ -312,11 +651,7 @@ class AttendanceProcessor(VideoProcessorBase):
                 3
             )
 
-
-            # ----------------------------------
-            # NAME
-            # ----------------------------------
-
+            # Name
             cv2.putText(
                 img,
                 display_name,
@@ -333,113 +668,59 @@ class AttendanceProcessor(VideoProcessorBase):
                 2
             )
 
+            # Recognition distance
+            cv2.putText(
+                img,
+                f"Distance: {confidence:.1f}",
+                (
+                    x,
+                    y + h + 48
+                ),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.48,
+                box_color,
+                1
+            )
 
-        return av.VideoFrame.from_ndarray(
-            img,
-            format="bgr24"
+        # Reset counts for students
+        # that disappeared from camera.
+        for student_id in list(
+            self.recognition_counts.keys()
+        ):
+
+            if (
+                student_id
+                not in
+                currently_seen
+            ):
+
+                self.recognition_counts[
+                    student_id
+                ] = 0
+
+        return (
+            av.VideoFrame
+            .from_ndarray(
+                img,
+                format="bgr24"
+            )
         )
 
 
-# ==========================================
-# STREAMLIT WEBSITE
-# ==========================================
-
-st.set_page_config(
-    page_title="EduVision",
-    page_icon="🎓",
-    layout="wide"
-)
-
-
-st.title("🎓 EduVision")
-
-st.subheader(
-    "📋 AI Smart Attendance"
-)
-
-
-st.write(
-    "Look at the camera. "
-    "Enrolled students can be recognized "
-    "and attendance is recorded automatically."
-)
-
-
-st.warning(
-    "Demo system: face recognition can make "
-    "mistakes. Unknown or uncertain faces "
-    "should not be treated as identified."
-)
-
-
-# ==========================================
-# CAMERA
-# ==========================================
-
-webrtc_streamer(
-
-    key="attendance-camera",
-
-    mode=WebRtcMode.SENDRECV,
-
-    video_processor_factory=AttendanceProcessor,
-
-    media_stream_constraints={
-        "video": True,
-        "audio": False
-    },
-
-    async_processing=True
-)
-
-
-# ==========================================
+# ============================================================
 # ATTENDANCE TABLE
-# ==========================================
+# ============================================================
 
-st.divider()
+def show_today_attendance():
 
-st.subheader(
-    "📊 Today's Attendance"
-)
-
-
-if os.path.exists(ATTENDANCE_PATH):
-
-    import pandas as pd
+    ensure_attendance_file()
 
     try:
 
-        attendance_data = pd.read_csv(
-            ATTENDANCE_PATH
-        )
-
-        if not attendance_data.empty:
-
-            today = datetime.now().strftime(
-                "%Y-%m-%d"
-            )
-
-            today_data = attendance_data[
-                attendance_data["date"]
-                == today
-            ]
-
-            st.metric(
-                "Students Present",
-                len(today_data)
-            )
-
-            st.dataframe(
-                today_data,
-                use_container_width=True
-            )
-
-        else:
-
-            st.info(
-                "No attendance recorded yet."
-            )
+        attendance = pd.read_csv(
+            ATTENDANCE_PATH,
+            dtype=str
+        ).fillna("")
 
     except Exception as error:
 
@@ -447,7 +728,208 @@ if os.path.exists(ATTENDANCE_PATH):
             f"Could not load attendance: {error}"
         )
 
+        return
 
-st.caption(
-    "VisionED AI • Smart Classroom Management"
-)
+    if attendance.empty:
+
+        st.info(
+            "No attendance recorded yet."
+        )
+
+        return
+
+    today = datetime.now().strftime(
+        "%Y-%m-%d"
+    )
+
+    today_data = attendance[
+        attendance[
+            "date"
+        ]
+        ==
+        today
+    ]
+
+    st.metric(
+        "Students Present Today",
+        len(
+            today_data[
+                today_data[
+                    "status"
+                ]
+                ==
+                "Present"
+            ]
+        )
+    )
+
+    if today_data.empty:
+
+        st.info(
+            "No attendance recorded today."
+        )
+
+    else:
+
+        st.dataframe(
+            today_data,
+            use_container_width=True,
+            hide_index=True
+        )
+
+
+# ============================================================
+# MAIN PAGE FUNCTION
+# ============================================================
+
+def render_page():
+
+    load_student_data()
+
+    labels_ready = (
+        load_labels()
+    )
+
+    model_ready = (
+        load_face_model()
+    )
+
+    ensure_attendance_file()
+
+    st.title(
+        "📷 AI Smart Attendance"
+    )
+
+    st.write(
+        "Recognized enrolled students are automatically "
+        "marked present after repeated successful detection."
+    )
+
+    st.warning(
+        "Face recognition can make mistakes. "
+        "Teachers should review attendance before relying on it."
+    )
+
+    # --------------------------------------------
+    # CHECK FILES
+    # --------------------------------------------
+
+    if not STUDENTS_PATH.exists():
+
+        st.error(
+            "students.csv was not found."
+        )
+
+        return
+
+    if not students:
+
+        st.warning(
+            "No registered students were found."
+        )
+
+        return
+
+    if not labels_ready:
+
+        st.error(
+            "Face labels were not found. "
+            "Register/train student faces first."
+        )
+
+        return
+
+    if not model_ready:
+
+        if not hasattr(
+            cv2,
+            "face"
+        ):
+
+            st.error(
+                "OpenCV face recognition is unavailable. "
+                "opencv-contrib-python-headless is required."
+            )
+
+        elif not MODEL_PATH.exists():
+
+            st.error(
+                "face_model.yml was not found. "
+                "Train the registered faces first."
+            )
+
+        else:
+
+            st.error(
+                "Face recognition model could not be loaded."
+            )
+
+        return
+
+    # --------------------------------------------
+    # CAMERA
+    # --------------------------------------------
+
+    st.subheader(
+        "🎥 Scan Class"
+    )
+
+    st.caption(
+        "Press START and allow camera permission."
+    )
+
+    try:
+
+        webrtc_streamer(
+
+            key="eduvision-attendance-camera",
+
+            mode=WebRtcMode.SENDRECV,
+
+            video_processor_factory=AttendanceProcessor,
+
+            media_stream_constraints={
+                "video": True,
+                "audio": False
+            },
+
+            async_processing=True
+        )
+
+    except Exception as error:
+
+        st.error(
+            "Camera could not start."
+        )
+
+        st.info(
+            "Allow camera permission in the browser "
+            "and reload EduVision."
+        )
+
+        st.code(
+            str(error)
+        )
+
+    st.divider()
+
+    st.subheader(
+        "📊 Today's Attendance"
+    )
+
+    show_today_attendance()
+
+
+# ============================================================
+# ALLOW THIS FILE TO RUN BY ITSELF FOR TESTING
+# ============================================================
+
+if __name__ == "__main__":
+
+    st.set_page_config(
+        page_title="EduVision Attendance",
+        page_icon="🎓",
+        layout="wide"
+    )
+
+    render_page()
