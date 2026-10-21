@@ -1402,106 +1402,20 @@ def attendance_page():
 
 def smart_occupancy_page():
 
-    st.title(
-        "👥 Smart Occupancy"
-    )
-
-    st.write(
-        "AI-powered classroom occupancy monitoring using YOLO."
-    )
-
-    st.info(
-        "EduVision can use your existing smart_occupancy.py "
-        "module for person detection and classroom occupancy."
-    )
-
-    module_path = (
-        BASE_DIR /
-        "smart_occupancy.py"
-    )
-
-    if not module_path.exists():
-
-        st.error(
-            "smart_occupancy.py was not found in the repository."
-        )
-
-        return
-
     try:
+        from smart_occupancy import render_page
 
-        smart_occupancy = (
-            importlib.import_module(
-                "smart_occupancy"
-            )
-        )
+        render_page()
 
     except Exception as error:
 
+        st.title("👥 Smart Occupancy")
+
         st.error(
-            "Smart Occupancy could not be loaded."
+            "Smart Occupancy could not start."
         )
 
-        st.code(
-            str(error)
-        )
-
-        st.warning(
-            "Check requirements.txt for the packages "
-            "used by smart_occupancy.py."
-        )
-
-        return
-
-    # Try common entry function names.
-
-    possible_functions = [
-        "main",
-        "run",
-        "app",
-        "smart_occupancy",
-        "show"
-    ]
-
-    for function_name in (
-        possible_functions
-    ):
-
-        function = getattr(
-            smart_occupancy,
-            function_name,
-            None
-        )
-
-        if callable(function):
-
-            try:
-
-                function()
-
-            except Exception as error:
-
-                st.error(
-                    "Smart Occupancy started but encountered an error."
-                )
-
-                st.code(
-                    str(error)
-                )
-
-            return
-
-    st.warning(
-        "smart_occupancy.py exists, but EduVision could not find "
-        "a main(), run(), app(), smart_occupancy() or show() function."
-    )
-
-    st.caption(
-        "The occupancy file needs one callable function "
-        "so app.py can open it from this page."
-    )
-
-
+        st.code(str(error))
 # ============================================================
 # TEACHER MANAGEMENT
 # ============================================================
