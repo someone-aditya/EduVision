@@ -4,6 +4,7 @@ import streamlit as st
 
 from pathlib import Path
 from ultralytics import YOLO
+
 from streamlit_webrtc import (
     VideoProcessorBase,
     WebRtcMode,
@@ -30,9 +31,16 @@ def load_model():
         return None
 
     try:
-        return YOLO(str(YOLO_MODEL_PATH))
+        return YOLO(
+            str(YOLO_MODEL_PATH)
+        )
 
-    except Exception:
+    except Exception as error:
+        print(
+            "YOLO loading error:",
+            error
+        )
+
         return None
 
 
@@ -43,14 +51,14 @@ model = load_model()
 # VIDEO PROCESSOR
 # ============================================================
 
-class OccupancyProcessor(VideoProcessorBase):
+class OccupancyProcessor(
+    VideoProcessorBase
+):
 
-    def __init__(self):
-
-        self.people_count = 0
-
-
-    def recv(self, frame):
+    def recv(
+        self,
+        frame
+    ):
 
         img = frame.to_ndarray(
             format="bgr24"
@@ -72,14 +80,17 @@ class OccupancyProcessor(VideoProcessorBase):
                 2
             )
 
-            return av.VideoFrame.from_ndarray(
-                img,
-                format="bgr24"
+            return (
+                av.VideoFrame
+                .from_ndarray(
+                    img,
+                    format="bgr24"
+                )
             )
 
 
         # ----------------------------------------
-        # YOLO PERSON DETECTION
+        # PERSON DETECTION
         # ----------------------------------------
 
         try:
@@ -103,9 +114,12 @@ class OccupancyProcessor(VideoProcessorBase):
                 2
             )
 
-            return av.VideoFrame.from_ndarray(
-                img,
-                format="bgr24"
+            return (
+                av.VideoFrame
+                .from_ndarray(
+                    img,
+                    format="bgr24"
+                )
             )
 
 
@@ -128,7 +142,9 @@ class OccupancyProcessor(VideoProcessorBase):
                 .numpy()
             )
 
-            people_count += len(boxes)
+            people_count += len(
+                boxes
+            )
 
             for box in boxes:
 
@@ -137,7 +153,7 @@ class OccupancyProcessor(VideoProcessorBase):
                     box
                 )
 
-                # Person box
+                # Green person box
                 cv2.rectangle(
                     img,
                     (x1, y1),
@@ -146,7 +162,7 @@ class OccupancyProcessor(VideoProcessorBase):
                     2
                 )
 
-                # Person label
+                # PERSON text
                 cv2.putText(
                     img,
                     "PERSON",
@@ -164,17 +180,14 @@ class OccupancyProcessor(VideoProcessorBase):
                 )
 
 
-        self.people_count = people_count
-
-
         # ----------------------------------------
-        # PEOPLE COUNTER
+        # COUNTER
         # ----------------------------------------
 
         cv2.rectangle(
             img,
             (10, 10),
-            (310, 60),
+            (320, 60),
             (0, 0, 0),
             -1
         )
@@ -196,7 +209,9 @@ class OccupancyProcessor(VideoProcessorBase):
 
         if people_count == 0:
 
-            status_text = "ROOM EMPTY"
+            status_text = (
+                "ROOM EMPTY"
+            )
 
             status_color = (
                 0,
@@ -207,7 +222,8 @@ class OccupancyProcessor(VideoProcessorBase):
         else:
 
             status_text = (
-                f"ROOM OCCUPIED: {people_count}"
+                f"ROOM OCCUPIED: "
+                f"{people_count}"
             )
 
             status_color = (
@@ -231,9 +247,12 @@ class OccupancyProcessor(VideoProcessorBase):
         )
 
 
-        return av.VideoFrame.from_ndarray(
-            img,
-            format="bgr24"
+        return (
+            av.VideoFrame
+            .from_ndarray(
+                img,
+                format="bgr24"
+            )
         )
 
 
@@ -243,26 +262,23 @@ class OccupancyProcessor(VideoProcessorBase):
 
 def render_page():
 
-    st.title(
-        "👥 Smart Occupancy"
-    )
-
     st.subheader(
-        "AI Classroom Occupancy Monitoring"
+        "🤖 AI Classroom Occupancy"
     )
 
     st.write(
-        "EduVision uses YOLO computer vision to detect "
-        "people visible in the classroom camera."
+        "EduVision uses YOLO AI computer vision "
+        "to detect and count people visible in "
+        "the classroom camera."
     )
 
     st.info(
-        "📷 Press START below and allow camera access."
+        "📷 Press START and allow camera access."
     )
 
 
     # ----------------------------------------
-    # CHECK YOLO MODEL
+    # MODEL FILE CHECK
     # ----------------------------------------
 
     if not YOLO_MODEL_PATH.exists():
@@ -272,11 +288,16 @@ def render_page():
         )
 
         st.caption(
-            "Keep yolo11n.pt in the main EduVision folder."
+            "Keep yolo11n.pt in the main "
+            "EduVision folder."
         )
 
         return
 
+
+    # ----------------------------------------
+    # MODEL CHECK
+    # ----------------------------------------
 
     if model is None:
 
@@ -285,7 +306,8 @@ def render_page():
         )
 
         st.warning(
-            "Check that ultralytics is installed."
+            "Check that ultralytics is "
+            "installed correctly."
         )
 
         return
@@ -303,7 +325,9 @@ def render_page():
 
             mode=WebRtcMode.SENDRECV,
 
-            video_processor_factory=OccupancyProcessor,
+            video_processor_factory=(
+                OccupancyProcessor
+            ),
 
             media_stream_constraints={
                 "video": True,
@@ -316,12 +340,13 @@ def render_page():
     except Exception as error:
 
         st.error(
-            "Smart Occupancy camera could not start."
+            "Smart Occupancy camera "
+            "could not start."
         )
 
         st.info(
-            "Allow camera permission for EduVision "
-            "and refresh the page."
+            "Allow camera permission "
+            "and refresh EduVision."
         )
 
         st.code(
@@ -330,7 +355,7 @@ def render_page():
 
 
     # ----------------------------------------
-    # INFORMATION
+    # DETAILS
     # ----------------------------------------
 
     st.divider()
@@ -348,25 +373,32 @@ def render_page():
     )
 
     c3.metric(
-        "📡 Status",
+        "📡 System",
         "Ready"
     )
 
     st.caption(
-        "EduVision • AI-Powered Smart Classroom Management"
+        "EduVision • AI-Powered "
+        "Smart Classroom Management"
     )
 
 
 # ============================================================
-# RUN FILE DIRECTLY
+# RUN DIRECTLY FOR TESTING
 # ============================================================
 
 if __name__ == "__main__":
 
     st.set_page_config(
-        page_title="EduVision - Smart Occupancy",
+        page_title=(
+            "EduVision - Smart Occupancy"
+        ),
         page_icon="👥",
         layout="wide"
+    )
+
+    st.title(
+        "🎓 EduVision"
     )
 
     render_page()
