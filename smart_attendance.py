@@ -1,5 +1,3 @@
-import os
-import csv
 import json
 import threading
 from datetime import datetime
@@ -27,7 +25,6 @@ MODEL_PATH = BASE_DIR / "data" / "model" / "face_model.yml"
 LABEL_PATH = BASE_DIR / "data" / "model" / "labels.json"
 STUDENTS_PATH = BASE_DIR / "data" / "students.csv"
 ATTENDANCE_PATH = BASE_DIR / "data" / "attendance.csv"
-
 
 STUDENT_COLUMNS = [
     "student_id",
@@ -71,7 +68,7 @@ def load_student_data():
     students = {}
 
     if not STUDENTS_PATH.exists():
-        return
+        return False
 
     try:
 
@@ -80,7 +77,7 @@ def load_student_data():
             dtype=str
         ).fillna("")
 
-        # Support older CSV
+        # Support older CSV files
         if (
             "class" in df.columns
             and
@@ -89,6 +86,17 @@ def load_student_data():
             df = df.rename(
                 columns={
                     "class": "class_name"
+                }
+            )
+
+        if (
+            "student_name" in df.columns
+            and
+            "name" not in df.columns
+        ):
+            df = df.rename(
+                columns={
+                    "student_name": "name"
                 }
             )
 
@@ -115,15 +123,17 @@ def load_student_data():
                         "name",
                         student_id
                     )
-                ),
+                ).strip(),
 
                 "class_name": str(
                     row.get(
                         "class_name",
                         ""
                     )
-                )
+                ).strip()
             }
+
+        return True
 
     except Exception as error:
 
@@ -132,9 +142,11 @@ def load_student_data():
             error
         )
 
+        return False
+
 
 # ============================================================
-# LOAD LABELS
+# LOAD LABEL MAP
 # ============================================================
 
 def load_labels():
@@ -185,6 +197,10 @@ def load_face_model():
     global recognizer
     global face_detector
 
+    recognizer = None
+    face_detector = None
+
+    # cv2.face comes from opencv-contrib
     if not hasattr(
         cv2,
         "face"
@@ -207,7 +223,7 @@ def load_face_model():
             str(MODEL_PATH)
         )
 
-        # First try repository cascade
+        # First try our assets folder
         cascade_path = (
             BASE_DIR
             / "assets"
@@ -224,7 +240,7 @@ def load_face_model():
 
         else:
 
-            # Fallback to OpenCV's built-in path
+            # Fallback to OpenCV's built-in cascade
             face_detector = (
                 cv2.CascadeClassifier(
                     cv2.data.haarcascades
@@ -234,6 +250,10 @@ def load_face_model():
             )
 
         if face_detector.empty():
+
+            recognizer = None
+            face_detector = None
+
             return False
 
         return True
@@ -241,11 +261,12 @@ def load_face_model():
     except Exception as error:
 
         print(
-            "Face model error:",
+            "Face model loading error:",
             error
         )
 
         recognizer = None
+        face_detector = None
 
         return False
 
@@ -279,12 +300,12 @@ def ensure_attendance_file():
             dtype=str
         ).fillna("")
 
+        # Support old attendance format
         if (
             "class" in df.columns
             and
             "class_name" not in df.columns
         ):
-
             df = df.rename(
                 columns={
                     "class": "class_name"
@@ -349,7 +370,7 @@ def mark_attendance(
             if column not in attendance.columns:
                 attendance[column] = ""
 
-        # Already marked today
+        # Do not mark same student twice today
         if not attendance.empty:
 
             already_marked = (
@@ -435,12 +456,12 @@ class AttendanceProcessor(
 
     def __init__(self):
 
-        # Consecutive recognition count
-        # for each student.
+        # Number of consecutive successful
+        # recognitions for each student
         self.recognition_counts = {}
 
-        # Prevent repeatedly calling
-        # attendance for same person.
+        # Stops repeated writes during same
+        # camera session
         self.marked_this_session = set()
 
 
@@ -453,7 +474,6 @@ class AttendanceProcessor(
             format="bgr24"
         )
 
-        # Model unavailable
         if (
             recognizer is None
             or
@@ -478,11 +498,13 @@ class AttendanceProcessor(
                 )
             )
 
+        # Convert camera frame to grayscale
         gray = cv2.cvtColor(
             img,
             cv2.COLOR_BGR2GRAY
         )
 
+        # Detect faces
         faces = (
             face_detector
             .detectMultiScale(
@@ -530,13 +552,18 @@ class AttendanceProcessor(
 
                 continue
 
-            # LBPH:
-            # lower distance = better.
+
+            # ==================================================
+            # LBPH RECOGNITION
+            # LOWER distance = better match
+            # ==================================================
+
             recognized = (
                 confidence < 45
                 and
                 label in label_map
             )
+
 
             if recognized:
 
@@ -556,16 +583,12 @@ class AttendanceProcessor(
                     student_id
                 )
 
-                class_name = (
-                    student.get(
-                        "class_name",
-                        ""
-                    )
+                class_name = student.get(
+                    "class_name",
+                    ""
                 )
 
-                display_name = (
-                    f"{name}"
-                )
+                display_name = name
 
                 box_color = (
                     0,
@@ -576,6 +599,11 @@ class AttendanceProcessor(
                 currently_seen.add(
                     student_id
                 )
+
+
+                # ==============================================
+                # COUNT SUCCESSFUL FRAMES
+                # ==============================================
 
                 count = (
                     self.recognition_counts
@@ -591,8 +619,11 @@ class AttendanceProcessor(
                     student_id
                 ] = count
 
-                # Require repeated recognition
-                # before recording attendance.
+
+                # ==============================================
+                # AUTO MARK AFTER 10 RECOGNITIONS
+                # ==============================================
+
                 if (
                     count >= 10
                     and
@@ -611,6 +642,8 @@ class AttendanceProcessor(
                         student_id
                     )
 
+
+                # Student ID under box
                 cv2.putText(
                     img,
                     student_id,
@@ -624,6 +657,7 @@ class AttendanceProcessor(
                     2
                 )
 
+
             else:
 
                 display_name = (
@@ -636,7 +670,11 @@ class AttendanceProcessor(
                     255
                 )
 
-            # Face box
+
+            # ==================================================
+            # FACE BOX
+            # ==================================================
+
             cv2.rectangle(
                 img,
                 (
@@ -651,7 +689,11 @@ class AttendanceProcessor(
                 3
             )
 
-            # Name
+
+            # ==================================================
+            # NAME
+            # ==================================================
+
             cv2.putText(
                 img,
                 display_name,
@@ -668,7 +710,11 @@ class AttendanceProcessor(
                 2
             )
 
-            # Recognition distance
+
+            # ==================================================
+            # DISTANCE
+            # ==================================================
+
             cv2.putText(
                 img,
                 f"Distance: {confidence:.1f}",
@@ -682,8 +728,9 @@ class AttendanceProcessor(
                 1
             )
 
-        # Reset counts for students
-        # that disappeared from camera.
+
+        # Reset recognition counter when
+        # student disappears from camera
         for student_id in list(
             self.recognition_counts.keys()
         ):
@@ -698,6 +745,7 @@ class AttendanceProcessor(
                     student_id
                 ] = 0
 
+
         return (
             av.VideoFrame
             .from_ndarray(
@@ -708,7 +756,7 @@ class AttendanceProcessor(
 
 
 # ============================================================
-# ATTENDANCE TABLE
+# TODAY'S ATTENDANCE
 # ============================================================
 
 def show_today_attendance():
@@ -730,6 +778,7 @@ def show_today_attendance():
 
         return
 
+
     if attendance.empty:
 
         st.info(
@@ -737,6 +786,7 @@ def show_today_attendance():
         )
 
         return
+
 
     today = datetime.now().strftime(
         "%Y-%m-%d"
@@ -750,18 +800,23 @@ def show_today_attendance():
         today
     ]
 
-    st.metric(
-        "Students Present Today",
-        len(
+
+    present_count = len(
+        today_data[
             today_data[
-                today_data[
-                    "status"
-                ]
-                ==
-                "Present"
+                "status"
             ]
-        )
+            ==
+            "Present"
+        ]
     )
+
+
+    st.metric(
+        "✅ Students Present Today",
+        present_count
+    )
+
 
     if today_data.empty:
 
@@ -779,7 +834,7 @@ def show_today_attendance():
 
 
 # ============================================================
-# MAIN PAGE FUNCTION
+# MAIN ATTENDANCE PAGE
 # ============================================================
 
 def render_page():
@@ -796,23 +851,27 @@ def render_page():
 
     ensure_attendance_file()
 
-    st.title(
-        "📷 AI Smart Attendance"
+
+    st.subheader(
+        "🤖 Automatic Face Recognition"
     )
 
     st.write(
-        "Recognized enrolled students are automatically "
-        "marked present after repeated successful detection."
+        "Look at the camera. EduVision recognizes "
+        "registered students and automatically marks "
+        "them present."
     )
+
 
     st.warning(
-        "Face recognition can make mistakes. "
-        "Teachers should review attendance before relying on it."
+        "⚠️ Face recognition can make mistakes. "
+        "Teachers should review the attendance results."
     )
 
-    # --------------------------------------------
-    # CHECK FILES
-    # --------------------------------------------
+
+    # ========================================================
+    # STUDENT CHECK
+    # ========================================================
 
     if not STUDENTS_PATH.exists():
 
@@ -822,22 +881,33 @@ def render_page():
 
         return
 
+
     if not students:
 
         st.warning(
-            "No registered students were found."
+            "No registered students found."
         )
 
         return
+
+
+    # ========================================================
+    # LABEL CHECK
+    # ========================================================
 
     if not labels_ready:
 
         st.error(
             "Face labels were not found. "
-            "Register/train student faces first."
+            "Train student faces first."
         )
 
         return
+
+
+    # ========================================================
+    # MODEL CHECK
+    # ========================================================
 
     if not model_ready:
 
@@ -847,15 +917,22 @@ def render_page():
         ):
 
             st.error(
-                "OpenCV face recognition is unavailable. "
-                "opencv-contrib-python-headless is required."
+                "OpenCV face recognition is unavailable."
+            )
+
+            st.info(
+                "requirements.txt must contain "
+                "opencv-contrib-python-headless."
             )
 
         elif not MODEL_PATH.exists():
 
             st.error(
-                "face_model.yml was not found. "
-                "Train the registered faces first."
+                "face_model.yml was not found."
+            )
+
+            st.info(
+                "Train the registered student faces first."
             )
 
         else:
@@ -866,17 +943,19 @@ def render_page():
 
         return
 
-    # --------------------------------------------
+
+    # ========================================================
     # CAMERA
-    # --------------------------------------------
+    # ========================================================
 
     st.subheader(
         "🎥 Scan Class"
     )
 
-    st.caption(
+    st.info(
         "Press START and allow camera permission."
     )
+
 
     try:
 
@@ -903,13 +982,18 @@ def render_page():
         )
 
         st.info(
-            "Allow camera permission in the browser "
-            "and reload EduVision."
+            "Allow camera permission in your browser "
+            "and refresh EduVision."
         )
 
         st.code(
             str(error)
         )
+
+
+    # ========================================================
+    # ATTENDANCE TABLE
+    # ========================================================
 
     st.divider()
 
@@ -921,7 +1005,7 @@ def render_page():
 
 
 # ============================================================
-# ALLOW THIS FILE TO RUN BY ITSELF FOR TESTING
+# RUN DIRECTLY FOR TESTING
 # ============================================================
 
 if __name__ == "__main__":
