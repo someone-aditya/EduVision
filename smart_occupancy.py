@@ -2,6 +2,7 @@ import av
 import cv2
 import streamlit as st
 
+from pathlib import Path
 from ultralytics import YOLO
 from streamlit_webrtc import (
     VideoProcessorBase,
@@ -10,79 +11,225 @@ from streamlit_webrtc import (
 )
 
 
-# ------------------------------------------
+# ============================================================
+# PATHS
+# ============================================================
+
+BASE_DIR = Path(__file__).resolve().parent
+YOLO_MODEL_PATH = BASE_DIR / "yolo11n.pt"
+
+
+# ============================================================
 # LOAD YOLO
-# ------------------------------------------
+# ============================================================
 
 @st.cache_resource
 def load_model():
-    return YOLO("yolo11n.pt")
+
+    if not YOLO_MODEL_PATH.exists():
+        return None
+
+    try:
+        return YOLO(str(YOLO_MODEL_PATH))
+
+    except Exception:
+        return None
 
 
 model = load_model()
 
 
-# ------------------------------------------
+# ============================================================
 # VIDEO PROCESSOR
-# ------------------------------------------
+# ============================================================
 
 class OccupancyProcessor(VideoProcessorBase):
 
+    def __init__(self):
+
+        self.people_count = 0
+
+
     def recv(self, frame):
 
-        img = frame.to_ndarray(format="bgr24")
-
-        # Detect people
-        results = model(
-            img,
-            classes=[0],      # 0 = person
-            conf=0.45,
-            verbose=False
+        img = frame.to_ndarray(
+            format="bgr24"
         )
+
+        # ----------------------------------------
+        # MODEL CHECK
+        # ----------------------------------------
+
+        if model is None:
+
+            cv2.putText(
+                img,
+                "YOLO MODEL NOT READY",
+                (20, 40),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (0, 0, 255),
+                2
+            )
+
+            return av.VideoFrame.from_ndarray(
+                img,
+                format="bgr24"
+            )
+
+
+        # ----------------------------------------
+        # YOLO PERSON DETECTION
+        # ----------------------------------------
+
+        try:
+
+            results = model(
+                img,
+                classes=[0],
+                conf=0.45,
+                verbose=False
+            )
+
+        except Exception:
+
+            cv2.putText(
+                img,
+                "DETECTION ERROR",
+                (20, 40),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (0, 0, 255),
+                2
+            )
+
+            return av.VideoFrame.from_ndarray(
+                img,
+                format="bgr24"
+            )
+
 
         people_count = 0
 
+
+        # ----------------------------------------
+        # DRAW PEOPLE
+        # ----------------------------------------
+
         for result in results:
 
-            if result.boxes is not None:
+            if result.boxes is None:
+                continue
 
-                boxes = result.boxes.xyxy.cpu().numpy()
+            boxes = (
+                result.boxes
+                .xyxy
+                .cpu()
+                .numpy()
+            )
 
-                people_count = len(boxes)
+            people_count += len(boxes)
 
-                for box in boxes:
+            for box in boxes:
 
-                    x1, y1, x2, y2 = map(int, box)
+                x1, y1, x2, y2 = map(
+                    int,
+                    box
+                )
 
-                    # Person box
-                    cv2.rectangle(
-                        img,
-                        (x1, y1),
-                        (x2, y2),
-                        (0, 255, 0),
-                        2
-                    )
+                # Person box
+                cv2.rectangle(
+                    img,
+                    (x1, y1),
+                    (x2, y2),
+                    (0, 255, 0),
+                    2
+                )
 
-                    cv2.putText(
-                        img,
-                        "PERSON",
-                        (x1, max(y1 - 10, 20)),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.6,
-                        (0, 255, 0),
-                        2
-                    )
+                # Person label
+                cv2.putText(
+                    img,
+                    "PERSON",
+                    (
+                        x1,
+                        max(
+                            y1 - 10,
+                            20
+                        )
+                    ),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (0, 255, 0),
+                    2
+                )
 
-        # Current number visible
+
+        self.people_count = people_count
+
+
+        # ----------------------------------------
+        # PEOPLE COUNTER
+        # ----------------------------------------
+
+        cv2.rectangle(
+            img,
+            (10, 10),
+            (310, 60),
+            (0, 0, 0),
+            -1
+        )
+
         cv2.putText(
             img,
             f"People Detected: {people_count}",
-            (20, 40),
+            (20, 43),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.8,
             (255, 255, 255),
             2
         )
+
+
+        # ----------------------------------------
+        # ROOM STATUS
+        # ----------------------------------------
+
+        if people_count == 0:
+
+            status_text = "ROOM EMPTY"
+
+            status_color = (
+                0,
+                165,
+                255
+            )
+
+        else:
+
+            status_text = (
+                f"ROOM OCCUPIED: {people_count}"
+            )
+
+            status_color = (
+                0,
+                255,
+                0
+            )
+
+
+        cv2.putText(
+            img,
+            status_text,
+            (
+                20,
+                img.shape[0] - 25
+            ),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            status_color,
+            2
+        )
+
 
         return av.VideoFrame.from_ndarray(
             img,
@@ -90,45 +237,136 @@ class OccupancyProcessor(VideoProcessorBase):
         )
 
 
-# ------------------------------------------
-# EDVISION WEBSITE
-# ------------------------------------------
+# ============================================================
+# SMART OCCUPANCY PAGE
+# ============================================================
 
-st.set_page_config(
-    page_title="EduVision - Smart Occupancy",
-    page_icon="🚪",
-    layout="wide"
-)
+def render_page():
 
-st.title("🎓 EduVision")
+    st.title(
+        "👥 Smart Occupancy"
+    )
 
-st.subheader("🚪 Smart Room Occupancy")
+    st.subheader(
+        "AI Classroom Occupancy Monitoring"
+    )
 
-st.write(
-    "EduVision uses AI computer vision to detect "
-    "people in the camera feed and monitor classroom occupancy."
-)
+    st.write(
+        "EduVision uses YOLO computer vision to detect "
+        "people visible in the classroom camera."
+    )
 
-st.info(
-    "Press START and allow camera access."
-)
+    st.info(
+        "📷 Press START below and allow camera access."
+    )
 
 
-# ------------------------------------------
-# CAMERA
-# ------------------------------------------
+    # ----------------------------------------
+    # CHECK YOLO MODEL
+    # ----------------------------------------
 
-webrtc_streamer(
-    key="eduvision-occupancy",
-    mode=WebRtcMode.SENDRECV,
-    video_processor_factory=OccupancyProcessor,
-    media_stream_constraints={
-        "video": True,
-        "audio": False
-    },
-    async_processing=True
-)
+    if not YOLO_MODEL_PATH.exists():
 
-st.caption(
-    "EduVision • AI-Powered Smart Classroom Management"
-)
+        st.error(
+            "yolo11n.pt was not found."
+        )
+
+        st.caption(
+            "Keep yolo11n.pt in the main EduVision folder."
+        )
+
+        return
+
+
+    if model is None:
+
+        st.error(
+            "YOLO could not be loaded."
+        )
+
+        st.warning(
+            "Check that ultralytics is installed."
+        )
+
+        return
+
+
+    # ----------------------------------------
+    # CAMERA
+    # ----------------------------------------
+
+    try:
+
+        webrtc_streamer(
+
+            key="eduvision-occupancy-camera",
+
+            mode=WebRtcMode.SENDRECV,
+
+            video_processor_factory=OccupancyProcessor,
+
+            media_stream_constraints={
+                "video": True,
+                "audio": False
+            },
+
+            async_processing=True
+        )
+
+    except Exception as error:
+
+        st.error(
+            "Smart Occupancy camera could not start."
+        )
+
+        st.info(
+            "Allow camera permission for EduVision "
+            "and refresh the page."
+        )
+
+        st.code(
+            str(error)
+        )
+
+
+    # ----------------------------------------
+    # INFORMATION
+    # ----------------------------------------
+
+    st.divider()
+
+    c1, c2, c3 = st.columns(3)
+
+    c1.metric(
+        "🤖 AI Model",
+        "YOLO11"
+    )
+
+    c2.metric(
+        "👤 Detection",
+        "People"
+    )
+
+    c3.metric(
+        "📡 Status",
+        "Ready"
+    )
+
+    st.caption(
+        "EduVision • AI-Powered Smart Classroom Management"
+    )
+
+
+# ============================================================
+# RUN FILE DIRECTLY
+# ============================================================
+
+if __name__ == "__main__":
+
+    st.set_page_config(
+        page_title="EduVision - Smart Occupancy",
+        page_icon="👥",
+        layout="wide"
+    )
+
+    render_page()
