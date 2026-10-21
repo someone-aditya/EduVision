@@ -1,6 +1,7 @@
 import os
 import json
 import hashlib
+import importlib
 from datetime import datetime
 from pathlib import Path
 
@@ -9,9 +10,9 @@ import streamlit as st
 
 
 # ============================================================
-# EDVISION - LIGHTWEIGHT VERSION
-# Super Admin + Teacher
-# No School Admin / Student Login / WebRTC
+# EDVISION
+# Admin + Teacher
+# Attendance + Camera + Smart Occupancy
 # ============================================================
 
 st.set_page_config(
@@ -23,153 +24,304 @@ st.set_page_config(
 
 
 # ============================================================
-# FILES
+# PATHS
 # ============================================================
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 
-DATA_DIR.mkdir(exist_ok=True)
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 STUDENTS_FILE = DATA_DIR / "students.csv"
 ATTENDANCE_FILE = DATA_DIR / "attendance.csv"
 USERS_FILE = DATA_DIR / "users.json"
 
 
-# Demo login
-ADMIN_ID = os.getenv("EDUVISION_ADMIN_ID", "12126")
-ADMIN_PASSWORD = os.getenv("EDUVISION_ADMIN_PASSWORD", "12126")
+# ============================================================
+# ADMIN LOGIN
+# ============================================================
+
+ADMIN_ID = os.getenv(
+    "EDUVISION_ADMIN_ID",
+    "12126"
+)
+
+ADMIN_PASSWORD = os.getenv(
+    "EDUVISION_ADMIN_PASSWORD",
+    "12126"
+)
 
 
 # ============================================================
-# DATA
+# PASSWORD
 # ============================================================
 
 def password_hash(password):
-    return hashlib.sha256(password.encode()).hexdigest()
+    return hashlib.sha256(
+        str(password).encode("utf-8")
+    ).hexdigest()
 
+
+# ============================================================
+# REQUIRED COLUMNS
+# ============================================================
+
+STUDENT_COLUMNS = [
+    "student_id",
+    "name",
+    "class_name",
+    "roll_no",
+    "status",
+]
+
+ATTENDANCE_COLUMNS = [
+    "student_id",
+    "name",
+    "class_name",
+    "date",
+    "time",
+    "status",
+]
+
+
+# ============================================================
+# INITIAL SETUP
+# ============================================================
 
 def setup_files():
 
     if not STUDENTS_FILE.exists():
+
         pd.DataFrame(
-            columns=[
-                "student_id",
-                "name",
-                "class_name",
-                "roll_no",
-                "status"
-            ]
-        ).to_csv(STUDENTS_FILE, index=False)
+            columns=STUDENT_COLUMNS
+        ).to_csv(
+            STUDENTS_FILE,
+            index=False
+        )
 
     if not ATTENDANCE_FILE.exists():
+
         pd.DataFrame(
-            columns=[
-                "student_id",
-                "name",
-                "class_name",
-                "date",
-                "time",
-                "status"
-            ]
-        ).to_csv(ATTENDANCE_FILE, index=False)
+            columns=ATTENDANCE_COLUMNS
+        ).to_csv(
+            ATTENDANCE_FILE,
+            index=False
+        )
 
     if not USERS_FILE.exists():
 
-        data = {
+        users = {
             "admin": {
                 "id": ADMIN_ID,
-                "password_hash": password_hash(ADMIN_PASSWORD)
+                "password_hash": password_hash(
+                    ADMIN_PASSWORD
+                )
             },
             "teachers": {}
         }
 
         USERS_FILE.write_text(
-            json.dumps(data, indent=2),
+            json.dumps(
+                users,
+                indent=2
+            ),
             encoding="utf-8"
         )
 
 
+# ============================================================
+# USERS
+# ============================================================
+
 def load_users():
 
     try:
-        return json.loads(
-            USERS_FILE.read_text(encoding="utf-8")
+
+        users = json.loads(
+            USERS_FILE.read_text(
+                encoding="utf-8"
+            )
         )
+
+        if "admin" not in users:
+            users["admin"] = {
+                "id": ADMIN_ID,
+                "password_hash": password_hash(
+                    ADMIN_PASSWORD
+                )
+            }
+
+        if "teachers" not in users:
+            users["teachers"] = {}
+
+        return users
 
     except Exception:
 
         return {
             "admin": {
                 "id": ADMIN_ID,
-                "password_hash": password_hash(ADMIN_PASSWORD)
+                "password_hash": password_hash(
+                    ADMIN_PASSWORD
+                )
             },
             "teachers": {}
         }
 
 
-def save_users(data):
+def save_users(users):
 
     USERS_FILE.write_text(
-        json.dumps(data, indent=2),
+        json.dumps(
+            users,
+            indent=2
+        ),
         encoding="utf-8"
     )
 
 
+# ============================================================
+# STUDENTS
+# ============================================================
+
 def load_students():
 
     try:
-        return pd.read_csv(
+
+        df = pd.read_csv(
             STUDENTS_FILE,
             dtype=str
         ).fillna("")
 
+        # ----------------------------------------
+        # Repair older EduVision CSV structures
+        # ----------------------------------------
+
+        rename_map = {}
+
+        if (
+            "class" in df.columns
+            and
+            "class_name" not in df.columns
+        ):
+            rename_map["class"] = "class_name"
+
+        if (
+            "student_name" in df.columns
+            and
+            "name" not in df.columns
+        ):
+            rename_map["student_name"] = "name"
+
+        if (
+            "id" in df.columns
+            and
+            "student_id" not in df.columns
+        ):
+            rename_map["id"] = "student_id"
+
+        if rename_map:
+            df = df.rename(
+                columns=rename_map
+            )
+
+        for column in STUDENT_COLUMNS:
+
+            if column not in df.columns:
+                df[column] = ""
+
+        df = df[
+            STUDENT_COLUMNS
+        ].copy()
+
+        df.to_csv(
+            STUDENTS_FILE,
+            index=False
+        )
+
+        return df
+
     except Exception:
 
         return pd.DataFrame(
-            columns=[
-                "student_id",
-                "name",
-                "class_name",
-                "roll_no",
-                "status"
-            ]
+            columns=STUDENT_COLUMNS
         )
 
 
 def save_students(df):
 
-    df.to_csv(
+    for column in STUDENT_COLUMNS:
+
+        if column not in df.columns:
+            df[column] = ""
+
+    df[
+        STUDENT_COLUMNS
+    ].to_csv(
         STUDENTS_FILE,
         index=False
     )
 
 
+# ============================================================
+# ATTENDANCE
+# ============================================================
+
 def load_attendance():
 
     try:
-        return pd.read_csv(
+
+        df = pd.read_csv(
             ATTENDANCE_FILE,
             dtype=str
         ).fillna("")
 
+        if (
+            "class" in df.columns
+            and
+            "class_name" not in df.columns
+        ):
+
+            df = df.rename(
+                columns={
+                    "class":
+                    "class_name"
+                }
+            )
+
+        for column in ATTENDANCE_COLUMNS:
+
+            if column not in df.columns:
+                df[column] = ""
+
+        df = df[
+            ATTENDANCE_COLUMNS
+        ].copy()
+
+        df.to_csv(
+            ATTENDANCE_FILE,
+            index=False
+        )
+
+        return df
+
     except Exception:
 
         return pd.DataFrame(
-            columns=[
-                "student_id",
-                "name",
-                "class_name",
-                "date",
-                "time",
-                "status"
-            ]
+            columns=ATTENDANCE_COLUMNS
         )
 
 
 def save_attendance(df):
 
-    df.to_csv(
+    for column in ATTENDANCE_COLUMNS:
+
+        if column not in df.columns:
+            df[column] = ""
+
+    df[
+        ATTENDANCE_COLUMNS
+    ].to_csv(
         ATTENDANCE_FILE,
         index=False
     )
@@ -179,7 +331,8 @@ setup_files()
 
 
 # ============================================================
-# MAGIC UI INSPIRED CSS
+# UI / MAGIC-UI INSPIRED CSS
+# No custom HTML hero sections are used.
 # ============================================================
 
 st.markdown(
@@ -187,451 +340,233 @@ st.markdown(
 <style>
 
 :root {
-    --bg:#020617;
-    --panel:#0f172a;
-    --panel2:#111827;
-    --blue:#3b82f6;
-    --cyan:#22d3ee;
-    --purple:#8b5cf6;
-    --pink:#ec4899;
-    --text:#f8fafc;
-    --muted:#94a3b8;
+    --bg: #020617;
+    --panel: #0f172a;
+    --panel2: #111827;
+    --blue: #3b82f6;
+    --cyan: #22d3ee;
+    --purple: #8b5cf6;
+    --text: #f8fafc;
+    --muted: #94a3b8;
 }
 
 
 /* BACKGROUND */
 
 .stApp {
-
-    color:white;
+    color: white;
 
     background:
+        radial-gradient(
+            circle at 12% 15%,
+            rgba(139,92,246,.16),
+            transparent 28%
+        ),
+        radial-gradient(
+            circle at 88% 70%,
+            rgba(34,211,238,.13),
+            transparent 30%
+        ),
+        linear-gradient(
+            135deg,
+            #020617,
+            #071426,
+            #020617
+        );
 
-    radial-gradient(
-        circle at 15% 20%,
-        rgba(139,92,246,.18),
-        transparent 25%
-    ),
+    background-size: 200% 200%;
 
-    radial-gradient(
-        circle at 85% 70%,
-        rgba(34,211,238,.15),
-        transparent 30%
-    ),
-
-    linear-gradient(
-        135deg,
-        #020617,
-        #071426,
-        #020617
-    );
-
-    background-size:200% 200%;
-
-    animation:bgMove 14s ease infinite;
+    animation:
+        eduBackground 14s ease infinite;
 }
 
 
-@keyframes bgMove {
+@keyframes eduBackground {
 
     0%,100% {
-        background-position:0% 50%;
+        background-position:
+            0% 50%;
     }
 
     50% {
-        background-position:100% 50%;
+        background-position:
+            100% 50%;
     }
-
 }
 
 
-/* MAIN WIDTH */
+/* PAGE */
 
 .block-container {
-
-    max-width:1400px;
-
-    padding-top:1.2rem;
-
+    max-width: 1400px;
+    padding-top: 1.4rem;
 }
 
 
-/* HERO */
+/* HEADINGS */
 
-.ev-hero {
-
-    position:relative;
-
-    overflow:hidden;
-
-    padding:38px 42px;
-
-    margin-bottom:25px;
-
-    border-radius:30px;
-
-    border:1px solid rgba(34,211,238,.18);
-
-    background:
-
-    linear-gradient(
-        125deg,
-        rgba(15,23,42,.96),
-        rgba(15,23,42,.72)
-    );
-
-    box-shadow:
-        0 25px 70px rgba(0,0,0,.4);
-
+h1 {
+    font-weight: 900 !important;
+    letter-spacing: -1px !important;
 }
 
-
-/* LIGHT RAY */
-
-.ev-hero:after {
-
-    content:"";
-
-    position:absolute;
-
-    inset:-100% -50%;
-
-    background:
-
-    linear-gradient(
-        110deg,
-        transparent 43%,
-        rgba(255,255,255,.10) 50%,
-        transparent 57%
-    );
-
-    animation:shine 7s linear infinite;
-
-    pointer-events:none;
-
-}
-
-
-@keyframes shine {
-
-    0% {
-        transform:translateX(-40%);
-    }
-
-    100% {
-        transform:translateX(40%);
-    }
-
-}
-
-
-/* TITLE */
-
-.ev-kicker {
-
-    color:#67e8f9;
-
-    font-size:.78rem;
-
-    font-weight:900;
-
-    letter-spacing:.18em;
-
-}
-
-
-.ev-title {
-
-    font-size:3.5rem;
-
-    font-weight:950;
-
-    letter-spacing:-2px;
-
-    margin-top:6px;
-
-    background:
-
-    linear-gradient(
-        90deg,
-        #ffffff,
-        #a78bfa,
-        #22d3ee
-    );
-
-    background-size:200%;
-
-    -webkit-background-clip:text;
-
-    color:transparent;
-
-    animation:titleMove 5s linear infinite;
-
-}
-
-
-@keyframes titleMove {
-
-    to {
-        background-position:200%;
-    }
-
-}
-
-
-.ev-sub {
-
-    color:#cbd5e1;
-
-    max-width:750px;
-
-    margin-top:12px;
-
-    font-size:1.05rem;
-
-}
-
-
-/* STATUS */
-
-.ev-online {
-
-    display:inline-flex;
-
-    align-items:center;
-
-    margin-top:18px;
-
-    padding:7px 12px;
-
-    border-radius:999px;
-
-    background:rgba(34,197,94,.08);
-
-    border:1px solid rgba(34,197,94,.20);
-
-    color:#bbf7d0;
-
-}
-
-
-.ev-dot {
-
-    width:8px;
-
-    height:8px;
-
-    margin-right:8px;
-
-    border-radius:50%;
-
-    background:#22c55e;
-
-    box-shadow:
-        0 0 15px #22c55e;
-
+h2,
+h3 {
+    color: #f8fafc !important;
 }
 
 
 /* INPUTS */
 
 div[data-baseweb="input"] {
-
-    background:#ffffff !important;
-
-    border-radius:12px !important;
-
+    background: white !important;
+    border-radius: 12px !important;
 }
-
 
 div[data-baseweb="input"] input {
-
-    color:#000000 !important;
-
-    background:#ffffff !important;
-
-    -webkit-text-fill-color:#000000 !important;
-
+    color: black !important;
+    background: white !important;
+    -webkit-text-fill-color:
+        black !important;
 }
-
 
 input[type="text"],
 input[type="password"],
 input[type="number"],
 input[type="email"] {
-
-    color:#000000 !important;
-
-    background:#ffffff !important;
-
-    -webkit-text-fill-color:#000000 !important;
-
+    color: black !important;
+    background: white !important;
+    -webkit-text-fill-color:
+        black !important;
 }
 
-
 input::placeholder {
-
-    color:#64748b !important;
-
-    -webkit-text-fill-color:#64748b !important;
-
+    color: #64748b !important;
+    -webkit-text-fill-color:
+        #64748b !important;
 }
 
 
 /* SELECT BOX */
 
 div[data-baseweb="select"] > div {
-
-    background:#ffffff !important;
-
-    color:#000000 !important;
-
-    border-radius:12px !important;
-
+    background: white !important;
+    color: black !important;
+    border-radius: 12px !important;
 }
-
 
 div[data-baseweb="select"] span {
-
-    color:#000000 !important;
-
+    color: black !important;
 }
-
 
 ul[role="listbox"] {
-
-    background:#ffffff !important;
-
+    background: white !important;
 }
-
 
 li[role="option"] {
-
-    color:#000000 !important;
-
-    background:#ffffff !important;
-
+    color: black !important;
+    background: white !important;
 }
-
 
 li[role="option"]:hover {
-
-    background:#e2e8f0 !important;
-
+    background: #e2e8f0 !important;
 }
 
 
-/* BUTTON - SHIMMER STYLE */
+/* BUTTONS */
 
 div.stButton > button {
+    width: 100%;
 
-    width:100%;
+    color: white !important;
 
-    position:relative;
+    font-weight: 800;
 
-    overflow:hidden;
-
-    color:white !important;
-
-    font-weight:850;
-
-    border-radius:14px;
+    border-radius: 14px;
 
     border:
-
-    1px solid rgba(
-        34,
-        211,
-        238,
-        .40
-    );
+        1px solid
+        rgba(34,211,238,.40);
 
     background:
+        linear-gradient(
+            90deg,
+            #2563eb,
+            #7c3aed,
+            #0891b2
+        );
 
-    linear-gradient(
-        90deg,
-        #2563eb,
-        #7c3aed,
-        #0891b2
-    );
-
-    background-size:200%;
+    background-size:
+        200% 100%;
 
     box-shadow:
-
         0 8px 25px
         rgba(37,99,235,.18);
 
-    transition:.2s;
-
+    transition:
+        all .20s ease;
 }
 
 
 div.stButton > button:hover {
 
     transform:
-
         translateY(-2px)
         scale(1.025);
 
-    background-position:100%;
+    background-position:
+        100% 0;
 
-    border-color:#67e8f9;
+    border-color:
+        #67e8f9;
 
     box-shadow:
-
         0 15px 35px
         rgba(34,211,238,.20);
-
 }
 
 
-/* METRIC MAGIC CARDS */
+/* METRIC CARDS */
 
 [data-testid="stMetric"] {
 
-    padding:18px;
+    padding: 18px;
 
-    border-radius:20px;
+    border-radius: 20px;
 
     background:
-
-    linear-gradient(
-        145deg,
-        rgba(15,23,42,.95),
-        rgba(30,41,59,.72)
-    );
+        linear-gradient(
+            145deg,
+            rgba(15,23,42,.95),
+            rgba(30,41,59,.72)
+        );
 
     border:
-
-    1px solid
-    rgba(139,92,246,.18);
+        1px solid
+        rgba(139,92,246,.18);
 
     box-shadow:
+        0 12px 30px
+        rgba(0,0,0,.25);
 
-    0 12px 30px
-    rgba(0,0,0,.25);
-
-    transition:.2s;
-
+    transition:
+        transform .2s ease,
+        border-color .2s ease;
 }
 
 
 [data-testid="stMetric"]:hover {
 
-    transform:translateY(-4px);
+    transform:
+        translateY(-4px);
 
     border-color:
-
-    rgba(34,211,238,.50);
-
+        rgba(34,211,238,.50);
 }
 
 
 [data-testid="stMetricValue"] {
-
-    color:white;
-
+    color: white;
 }
 
 
@@ -640,21 +575,16 @@ div.stButton > button:hover {
 [data-testid="stSidebar"] {
 
     background:
-
-    rgba(2,6,23,.97);
+        rgba(2,6,23,.97);
 
     border-right:
-
-    1px solid
-    rgba(34,211,238,.12);
-
+        1px solid
+        rgba(34,211,238,.12);
 }
 
 
 [data-testid="stSidebar"] * {
-
-    color:white;
-
+    color: white;
 }
 
 
@@ -662,30 +592,26 @@ div.stButton > button:hover {
 
 [data-testid="stCameraInput"] {
 
-    padding:12px;
+    padding: 12px;
 
-    border-radius:20px;
+    border-radius: 20px;
 
     border:
-
-    1px solid
-    rgba(34,211,238,.25);
+        1px solid
+        rgba(34,211,238,.25);
 
     background:
-
-    rgba(15,23,42,.80);
-
+        rgba(15,23,42,.80);
 }
 
 
-/* DATAFRAME */
+/* TABLE */
 
 [data-testid="stDataFrame"] {
 
-    border-radius:16px;
+    border-radius: 16px;
 
-    overflow:hidden;
-
+    overflow: hidden;
 }
 
 
@@ -693,41 +619,38 @@ div.stButton > button:hover {
 
 .stTabs [data-baseweb="tab"] {
 
-    background:#111827;
+    background:
+        #111827;
 
-    border-radius:12px;
+    border-radius:
+        12px;
 
-    color:white;
+    color:
+        white;
 
-    padding:8px 18px;
-
+    padding:
+        8px 18px;
 }
 
 
-/* ALERTS */
+/* ALERT */
 
 [data-testid="stAlert"] {
-
-    border-radius:14px;
-
+    border-radius: 14px;
 }
 
 
 /* LABELS */
 
 label {
-
-    color:white !important;
-
+    color: white !important;
 }
 
 
-/* HIDE STREAMLIT FOOTER */
+/* FOOTER */
 
 footer {
-
-    visibility:hidden;
-
+    visibility: hidden;
 }
 
 </style>
@@ -737,7 +660,7 @@ footer {
 
 
 # ============================================================
-# SESSION
+# SESSION STATE
 # ============================================================
 
 if "logged_in" not in st.session_state:
@@ -751,52 +674,45 @@ if "user_id" not in st.session_state:
 
 
 # ============================================================
-# LOGIN
+# LOGIN PAGE
 # ============================================================
 
 def login_page():
 
-    st.markdown(
-        """
-        <div class="ev-hero">
+    # Normal Streamlit components.
+    # No <div> hero, so raw HTML cannot appear.
 
-            <div class="ev-kicker">
-                AI • SMART CLASSROOM
-            </div>
+    st.title("🎓 EduVision")
 
-            <div class="ev-title">
-                EduVision
-            </div>
-
-            <div class="ev-sub">
-                Smarter classrooms through fast attendance,
-                classroom monitoring and simple management.
-            </div>
-
-            <div class="ev-online">
-                <span class="ev-dot"></span>
-                System Online
-            </div>
-
-        </div>
-        """,
-        unsafe_allow_html=True
+    st.subheader(
+        "AI • SMART CLASSROOM"
     )
 
-    c1, c2, c3 = st.columns(
-        [1, 1.15, 1]
+    st.write(
+        "Smarter classrooms through automated attendance, "
+        "classroom monitoring and simple management."
     )
 
-    with c2:
+    st.success(
+        "🟢 System Online"
+    )
 
-        st.markdown(
-            "## ✨ Welcome Back"
+    st.divider()
+
+    left, middle, right = st.columns(
+        [1, 1.2, 1]
+    )
+
+    with middle:
+
+        st.subheader(
+            "✨ Welcome Back"
         )
 
         role = st.selectbox(
             "Login as",
             [
-                "Super Admin",
+                "Admin",
                 "Teacher"
             ]
         )
@@ -819,7 +735,7 @@ def login_page():
 
             valid = False
 
-            if role == "Super Admin":
+            if role == "Admin":
 
                 admin = users.get(
                     "admin",
@@ -827,22 +743,22 @@ def login_page():
                 )
 
                 valid = (
-
                     user_id
                     ==
                     admin.get("id")
 
                     and
 
-                    password_hash(password)
+                    password_hash(
+                        password
+                    )
                     ==
                     admin.get(
                         "password_hash"
                     )
-
                 )
 
-            else:
+            elif role == "Teacher":
 
                 teacher = (
                     users
@@ -857,7 +773,6 @@ def login_page():
                 )
 
                 valid = (
-
                     bool(teacher)
 
                     and
@@ -869,20 +784,19 @@ def login_page():
 
                     and
 
-                    password_hash(password)
+                    password_hash(
+                        password
+                    )
                     ==
                     teacher.get(
                         "password_hash"
                     )
-
                 )
 
             if valid:
 
                 st.session_state.logged_in = True
-
                 st.session_state.role = role
-
                 st.session_state.user_id = user_id
 
                 st.rerun()
@@ -901,7 +815,6 @@ def login_page():
 def dashboard():
 
     students = load_students()
-
     attendance = load_attendance()
 
     today = datetime.now().strftime(
@@ -911,7 +824,9 @@ def dashboard():
     if not attendance.empty:
 
         today_data = attendance[
-            attendance["date"] == today
+            attendance["date"]
+            ==
+            today
         ]
 
     else:
@@ -930,31 +845,23 @@ def dashboard():
             ]
         )
 
-    st.markdown(
-        """
-        <div class="ev-hero">
+    # Normal Python Streamlit UI
+    st.title("🎓 EduVision")
 
-            <div class="ev-kicker">
-                SMART CLASSROOM MANAGEMENT
-            </div>
-
-            <div class="ev-title">
-                EduVision
-            </div>
-
-            <div class="ev-sub">
-                Your lightweight classroom management dashboard.
-            </div>
-
-            <div class="ev-online">
-                <span class="ev-dot"></span>
-                System Online
-            </div>
-
-        </div>
-        """,
-        unsafe_allow_html=True
+    st.subheader(
+        "Smart Classroom Management"
     )
+
+    st.write(
+        "Automated attendance and classroom monitoring "
+        "so teachers can spend more time teaching."
+    )
+
+    st.success(
+        "🟢 System Online"
+    )
+
+    st.divider()
 
     a, b, c, d = st.columns(4)
 
@@ -978,36 +885,37 @@ def dashboard():
         st.session_state.role
     )
 
-    st.markdown(
-        "## ⚡ Quick Actions"
+    st.subheader(
+        "⚡ Quick Actions"
     )
 
     st.info(
         "Use the sidebar to manage students, "
-        "open the camera, take attendance and manage teachers."
+        "take attendance and open Smart Occupancy."
     )
 
 
 # ============================================================
-# STUDENTS
+# STUDENT MANAGEMENT
 # ============================================================
 
 def students_page():
 
     students = load_students()
 
-    st.markdown(
-        "## 🎓 Student Management"
+    st.title(
+        "🎓 Student Management"
     )
 
     if (
         st.session_state.role
         ==
-        "Super Admin"
+        "Admin"
     ):
 
         with st.expander(
-            "➕ Add New Student"
+            "➕ Add New Student",
+            expanded=False
         ):
 
             c1, c2 = st.columns(2)
@@ -1015,21 +923,25 @@ def students_page():
             with c1:
 
                 student_id = st.text_input(
-                    "Student ID"
+                    "Student ID",
+                    key="new_student_id"
                 )
 
                 name = st.text_input(
-                    "Full Name"
+                    "Full Name",
+                    key="new_student_name"
                 )
 
             with c2:
 
                 class_name = st.text_input(
-                    "Class"
+                    "Class",
+                    key="new_student_class"
                 )
 
                 roll_no = st.text_input(
-                    "Roll Number"
+                    "Roll Number",
+                    key="new_student_roll"
                 )
 
             if st.button(
@@ -1041,6 +953,14 @@ def students_page():
                 )
 
                 name = name.strip()
+
+                class_name = (
+                    class_name.strip()
+                )
+
+                roll_no = (
+                    roll_no.strip()
+                )
 
                 if not student_id:
 
@@ -1058,7 +978,8 @@ def students_page():
                     not students.empty
                     and
                     student_id
-                    in students[
+                    in
+                    students[
                         "student_id"
                     ].tolist()
                 ):
@@ -1108,8 +1029,8 @@ def students_page():
 
                     st.rerun()
 
-    st.markdown(
-        "### Student List"
+    st.subheader(
+        "Student List"
     )
 
     if students.empty:
@@ -1126,36 +1047,97 @@ def students_page():
             hide_index=True
         )
 
+        if (
+            st.session_state.role
+            ==
+            "Admin"
+        ):
+
+            st.divider()
+
+            st.subheader(
+                "🗑️ Remove Student"
+            )
+
+            student_options = {}
+
+            for _, student in (
+                students.iterrows()
+            ):
+
+                label = (
+                    f"{student['student_id']} — "
+                    f"{student['name']}"
+                )
+
+                student_options[
+                    label
+                ] = student[
+                    "student_id"
+                ]
+
+            selected = st.selectbox(
+                "Select Student",
+                list(
+                    student_options.keys()
+                ),
+                key="delete_student"
+            )
+
+            if st.button(
+                "Remove Selected Student"
+            ):
+
+                sid = student_options[
+                    selected
+                ]
+
+                students = students[
+                    students[
+                        "student_id"
+                    ]
+                    !=
+                    sid
+                ]
+
+                save_students(
+                    students
+                )
+
+                st.success(
+                    "Student removed."
+                )
+
+                st.rerun()
+
 
 # ============================================================
 # CAMERA
 # ============================================================
 
-def camera_page():
+def camera_capture(
+    key="classroom_camera"
+):
 
-    st.markdown(
-        "## 📷 Classroom Camera"
+    st.subheader(
+        "📷 Classroom Camera"
     )
 
     st.caption(
-        "Click the camera button below and allow camera permission in your browser."
-    )
-
-    st.info(
-        "This lightweight version uses Streamlit's built-in camera "
-        "instead of WebRTC, removing the PyArrow/WebRTC crash."
+        "Allow camera access when your browser asks for permission."
     )
 
     try:
 
         picture = st.camera_input(
-            "📷 Open Camera / Capture"
+            "Open Camera / Capture",
+            key=key
         )
 
         if picture is not None:
 
             st.success(
-                "✅ Camera is working!"
+                "✅ Camera is working."
             )
 
             st.image(
@@ -1164,9 +1146,7 @@ def camera_page():
                 use_container_width=True
             )
 
-            st.session_state[
-                "latest_camera_photo"
-            ] = picture.getvalue()
+            return picture
 
     except Exception as error:
 
@@ -1174,10 +1154,16 @@ def camera_page():
             "Camera could not open."
         )
 
-        st.warning(
-            "Allow Camera permission for this website "
-            "in your browser and refresh the page."
+        st.info(
+            "Check the browser camera permission "
+            "and refresh the page."
         )
+
+        st.caption(
+            str(error)
+        )
+
+    return None
 
 
 # ============================================================
@@ -1187,30 +1173,46 @@ def camera_page():
 def attendance_page():
 
     students = load_students()
-
     attendance = load_attendance()
 
-    st.markdown(
-        "## ✅ Smart Attendance"
+    st.title(
+        "📷 Smart Attendance"
     )
 
-    tab1, tab2 = st.tabs(
+    st.write(
+        "Use the classroom camera and attendance tools "
+        "to reduce time spent taking attendance manually."
+    )
+
+    camera_tab, manual_tab, history_tab = st.tabs(
         [
-            "📷 Scan / Camera",
-            "✋ Manual Attendance"
+            "📷 Camera",
+            "✋ Attendance",
+            "📋 History"
         ]
     )
 
-    with tab1:
+    # --------------------------------------------------------
+    # CAMERA
+    # --------------------------------------------------------
 
-        camera_page()
+    with camera_tab:
 
-        st.caption(
-            "For the presentation, capture the student first, "
-            "then confirm their attendance from the Manual Attendance tab."
+        camera_capture(
+            key="attendance_camera"
         )
 
-    with tab2:
+        st.info(
+            "The current lightweight camera is stable browser "
+            "capture. Your face-recognition module can be connected "
+            "to this attendance section separately."
+        )
+
+    # --------------------------------------------------------
+    # ATTENDANCE
+    # --------------------------------------------------------
+
+    with manual_tab:
 
         if students.empty:
 
@@ -1218,185 +1220,283 @@ def attendance_page():
                 "Add at least one student first."
             )
 
-            return
+        else:
 
-        options = {}
+            student_options = {}
 
-        for _, student in students.iterrows():
+            for _, student in (
+                students.iterrows()
+            ):
 
-            label = (
-                f"{student['student_id']} — "
-                f"{student['name']} — "
-                f"{student['class_name']}"
-            )
-
-            options[label] = student
-
-        selected = st.selectbox(
-            "Select Student",
-            list(options.keys())
-        )
-
-        status = st.selectbox(
-            "Attendance Status",
-            [
-                "Present",
-                "Late",
-                "Absent"
-            ]
-        )
-
-        if st.button(
-            "✅ Save Attendance"
-        ):
-
-            student = options[
-                selected
-            ]
-
-            now = datetime.now()
-
-            date = now.strftime(
-                "%Y-%m-%d"
-            )
-
-            time = now.strftime(
-                "%H:%M:%S"
-            )
-
-            existing = (
-
-                attendance[
-                    (
-                        attendance[
-                            "student_id"
-                        ]
-                        ==
-                        student[
-                            "student_id"
-                        ]
-                    )
-                    &
-                    (
-                        attendance[
-                            "date"
-                        ]
-                        ==
-                        date
-                    )
-                ]
-
-                if not attendance.empty
-
-                else
-
-                pd.DataFrame()
-
-            )
-
-            new_record = {
-
-                "student_id":
-                    student[
-                        "student_id"
-                    ],
-
-                "name":
-                    student[
-                        "name"
-                    ],
-
-                "class_name":
-                    student[
-                        "class_name"
-                    ],
-
-                "date":
-                    date,
-
-                "time":
-                    time,
-
-                "status":
-                    status
-
-            }
-
-            if not existing.empty:
-
-                mask = (
-
-                    (
-                        attendance[
-                            "student_id"
-                        ]
-                        ==
-                        student[
-                            "student_id"
-                        ]
-                    )
-
-                    &
-
-                    (
-                        attendance[
-                            "date"
-                        ]
-                        ==
-                        date
-                    )
-
+                class_name = student.get(
+                    "class_name",
+                    ""
                 )
 
-                for key, value in (
-                    new_record.items()
+                label = (
+                    f"{student.get('student_id', '')} — "
+                    f"{student.get('name', '')}"
+                )
+
+                if class_name:
+                    label += (
+                        f" — {class_name}"
+                    )
+
+                student_options[
+                    label
+                ] = student
+
+            selected = st.selectbox(
+                "Select Student",
+                list(
+                    student_options.keys()
+                ),
+                key="attendance_student"
+            )
+
+            status = st.selectbox(
+                "Attendance Status",
+                [
+                    "Present",
+                    "Late",
+                    "Absent"
+                ]
+            )
+
+            if st.button(
+                "✅ Save Attendance"
+            ):
+
+                student = (
+                    student_options[
+                        selected
+                    ]
+                )
+
+                now = datetime.now()
+
+                date = now.strftime(
+                    "%Y-%m-%d"
+                )
+
+                time = now.strftime(
+                    "%H:%M:%S"
+                )
+
+                student_id = student.get(
+                    "student_id",
+                    ""
+                )
+
+                existing_mask = (
+                    (
+                        attendance[
+                            "student_id"
+                        ]
+                        ==
+                        student_id
+                    )
+                    &
+                    (
+                        attendance[
+                            "date"
+                        ]
+                        ==
+                        date
+                    )
+                )
+
+                record = {
+                    "student_id":
+                        student_id,
+
+                    "name":
+                        student.get(
+                            "name",
+                            ""
+                        ),
+
+                    "class_name":
+                        student.get(
+                            "class_name",
+                            ""
+                        ),
+
+                    "date":
+                        date,
+
+                    "time":
+                        time,
+
+                    "status":
+                        status
+                }
+
+                if (
+                    not attendance.empty
+                    and
+                    existing_mask.any()
                 ):
 
-                    attendance.loc[
-                        mask,
-                        key
-                    ] = value
+                    for key, value in (
+                        record.items()
+                    ):
 
-            else:
+                        attendance.loc[
+                            existing_mask,
+                            key
+                        ] = value
 
-                attendance = pd.concat(
-                    [
-                        attendance,
+                else:
 
-                        pd.DataFrame(
-                            [new_record]
-                        )
-                    ],
-                    ignore_index=True
+                    attendance = pd.concat(
+                        [
+                            attendance,
+                            pd.DataFrame(
+                                [record]
+                            )
+                        ],
+                        ignore_index=True
+                    )
+
+                save_attendance(
+                    attendance
                 )
 
-            save_attendance(
-                attendance
+                st.success(
+                    f"{record['name']} marked {status}."
+                )
+
+    # --------------------------------------------------------
+    # HISTORY
+    # --------------------------------------------------------
+
+    with history_tab:
+
+        attendance = (
+            load_attendance()
+        )
+
+        if attendance.empty:
+
+            st.info(
+                "No attendance records yet."
             )
 
-            st.success(
-                f"{student['name']} marked {status}."
+        else:
+
+            st.dataframe(
+                attendance.iloc[::-1],
+                use_container_width=True,
+                hide_index=True
             )
 
-    st.markdown(
-        "### 📋 Attendance History"
+
+# ============================================================
+# SMART OCCUPANCY
+# ============================================================
+
+def smart_occupancy_page():
+
+    st.title(
+        "👥 Smart Occupancy"
     )
 
-    attendance = load_attendance()
+    st.write(
+        "AI-powered classroom occupancy monitoring using YOLO."
+    )
 
-    if attendance.empty:
+    st.info(
+        "EduVision can use your existing smart_occupancy.py "
+        "module for person detection and classroom occupancy."
+    )
 
-        st.info(
-            "No attendance records yet."
+    module_path = (
+        BASE_DIR /
+        "smart_occupancy.py"
+    )
+
+    if not module_path.exists():
+
+        st.error(
+            "smart_occupancy.py was not found in the repository."
         )
 
-    else:
+        return
 
-        st.dataframe(
-            attendance.iloc[::-1],
-            use_container_width=True,
-            hide_index=True
+    try:
+
+        smart_occupancy = (
+            importlib.import_module(
+                "smart_occupancy"
+            )
         )
+
+    except Exception as error:
+
+        st.error(
+            "Smart Occupancy could not be loaded."
+        )
+
+        st.code(
+            str(error)
+        )
+
+        st.warning(
+            "Check requirements.txt for the packages "
+            "used by smart_occupancy.py."
+        )
+
+        return
+
+    # Try common entry function names.
+
+    possible_functions = [
+        "main",
+        "run",
+        "app",
+        "smart_occupancy",
+        "show"
+    ]
+
+    for function_name in (
+        possible_functions
+    ):
+
+        function = getattr(
+            smart_occupancy,
+            function_name,
+            None
+        )
+
+        if callable(function):
+
+            try:
+
+                function()
+
+            except Exception as error:
+
+                st.error(
+                    "Smart Occupancy started but encountered an error."
+                )
+
+                st.code(
+                    str(error)
+                )
+
+            return
+
+    st.warning(
+        "smart_occupancy.py exists, but EduVision could not find "
+        "a main(), run(), app(), smart_occupancy() or show() function."
+    )
+
+    st.caption(
+        "The occupancy file needs one callable function "
+        "so app.py can open it from this page."
+    )
 
 
 # ============================================================
@@ -1405,8 +1505,8 @@ def attendance_page():
 
 def teacher_management():
 
-    st.markdown(
-        "## 👨‍🏫 Teacher Accounts"
+    st.title(
+        "👨‍🏫 Teacher Accounts"
     )
 
     users = load_users()
@@ -1441,16 +1541,20 @@ def teacher_management():
                 teacher_id.strip()
             )
 
+            teacher_name = (
+                teacher_name.strip()
+            )
+
             if not teacher_id:
 
                 st.error(
                     "Enter Teacher ID."
                 )
 
-            elif not teacher_name.strip():
+            elif not teacher_name:
 
                 st.error(
-                    "Enter teacher name."
+                    "Enter Teacher Name."
                 )
 
             elif len(
@@ -1472,9 +1576,8 @@ def teacher_management():
                 teachers[
                     teacher_id
                 ] = {
-
                     "name":
-                        teacher_name.strip(),
+                        teacher_name,
 
                     "password_hash":
                         password_hash(
@@ -1483,7 +1586,6 @@ def teacher_management():
 
                     "enabled":
                         True
-
                 }
 
                 save_users(
@@ -1504,13 +1606,13 @@ def teacher_management():
 
         return
 
-    teacher_rows = []
+    rows = []
 
     for teacher_id, info in (
         teachers.items()
     ):
 
-        teacher_rows.append(
+        rows.append(
             {
                 "Teacher ID":
                     teacher_id,
@@ -1536,21 +1638,22 @@ def teacher_management():
 
     st.dataframe(
         pd.DataFrame(
-            teacher_rows
+            rows
         ),
         use_container_width=True,
         hide_index=True
     )
 
-    st.markdown(
-        "### Manage Account"
+    st.subheader(
+        "Manage Account"
     )
 
     selected_teacher = st.selectbox(
         "Teacher",
         list(
             teachers.keys()
-        )
+        ),
+        key="manage_teacher"
     )
 
     c1, c2 = st.columns(2)
@@ -1596,17 +1699,128 @@ def teacher_management():
 
 
 # ============================================================
-# CHANGE OWN PASSWORD
+# REPORTS
+# ============================================================
+
+def reports_page():
+
+    st.title(
+        "📊 Reports"
+    )
+
+    students = load_students()
+    attendance = load_attendance()
+
+    c1, c2, c3 = st.columns(3)
+
+    c1.metric(
+        "Students",
+        len(students)
+    )
+
+    c2.metric(
+        "Attendance Records",
+        len(attendance)
+    )
+
+    if not attendance.empty:
+
+        present = len(
+            attendance[
+                attendance["status"]
+                ==
+                "Present"
+            ]
+        )
+
+        percentage = round(
+            (
+                present
+                /
+                len(attendance)
+            )
+            *
+            100,
+            1
+        )
+
+    else:
+
+        percentage = 0
+
+    c3.metric(
+        "Overall Present %",
+        f"{percentage}%"
+    )
+
+    st.divider()
+
+    if attendance.empty:
+
+        st.info(
+            "No attendance data yet."
+        )
+
+    else:
+
+        # Filter by class
+
+        classes = sorted(
+            [
+                value
+                for value
+                in
+                attendance[
+                    "class_name"
+                ].unique()
+                if value
+            ]
+        )
+
+        class_filter = st.selectbox(
+            "Class Filter",
+            [
+                "All Classes"
+            ]
+            +
+            classes
+        )
+
+        report = attendance.copy()
+
+        if (
+            class_filter
+            !=
+            "All Classes"
+        ):
+
+            report = report[
+                report[
+                    "class_name"
+                ]
+                ==
+                class_filter
+            ]
+
+        st.dataframe(
+            report.iloc[::-1],
+            use_container_width=True,
+            hide_index=True
+        )
+
+
+# ============================================================
+# SETTINGS
 # ============================================================
 
 def settings_page():
 
-    st.markdown(
-        "## ⚙️ Settings"
+    st.title(
+        "⚙️ Settings"
     )
 
-    st.markdown(
-        "### 🔐 Change My Password"
+    st.subheader(
+        "🔐 Change My Password"
     )
 
     new_password = st.text_input(
@@ -1648,7 +1862,7 @@ def settings_page():
             if (
                 st.session_state.role
                 ==
-                "Super Admin"
+                "Admin"
             ):
 
                 users[
@@ -1661,15 +1875,28 @@ def settings_page():
 
             else:
 
-                users[
-                    "teachers"
-                ][
+                teacher_id = (
                     st.session_state.user_id
-                ][
-                    "password_hash"
-                ] = password_hash(
-                    new_password
                 )
+
+                if (
+                    teacher_id
+                    in
+                    users.get(
+                        "teachers",
+                        {}
+                    )
+                ):
+
+                    users[
+                        "teachers"
+                    ][
+                        teacher_id
+                    ][
+                        "password_hash"
+                    ] = password_hash(
+                        new_password
+                    )
 
             save_users(
                 users
@@ -1681,87 +1908,15 @@ def settings_page():
 
     st.divider()
 
-    st.markdown(
-        "### 💾 Data Storage"
+    st.subheader(
+        "💾 Data"
     )
 
     st.warning(
-        "IMPORTANT: This version saves data to files on the server. "
-        "Render can reset these files during redeploy/restart. "
-        "For data that permanently follows you to every computer, "
-        "EduVision needs a cloud database."
+        "CSV/JSON files stored directly on Render may reset "
+        "when the service is redeployed or restarted. "
+        "Permanent cross-device storage requires a cloud database."
     )
-
-
-# ============================================================
-# REPORTS
-# ============================================================
-
-def reports_page():
-
-    st.markdown(
-        "## 📊 Reports"
-    )
-
-    students = load_students()
-
-    attendance = load_attendance()
-
-    c1, c2, c3 = st.columns(3)
-
-    c1.metric(
-        "Students",
-        len(students)
-    )
-
-    c2.metric(
-        "Attendance Records",
-        len(attendance)
-    )
-
-    if not attendance.empty:
-
-        present = len(
-            attendance[
-                attendance[
-                    "status"
-                ]
-                ==
-                "Present"
-            ]
-        )
-
-        percentage = round(
-            (
-                present
-                /
-                len(attendance)
-            )
-            *
-            100,
-            1
-        )
-
-    else:
-
-        percentage = 0
-
-    c3.metric(
-        "Overall Present %",
-        f"{percentage}%"
-    )
-
-    if not attendance.empty:
-
-        st.markdown(
-            "### Attendance Data"
-        )
-
-        st.dataframe(
-            attendance.iloc[::-1],
-            use_container_width=True,
-            hide_index=True
-        )
 
 
 # ============================================================
@@ -1771,9 +1926,7 @@ def reports_page():
 def logout():
 
     st.session_state.logged_in = False
-
     st.session_state.role = None
-
     st.session_state.user_id = None
 
     st.rerun()
@@ -1787,12 +1940,13 @@ def app():
 
     with st.sidebar:
 
-        st.markdown(
-            "# 🎓 EduVision"
+        st.title(
+            "🎓 EduVision"
         )
 
         st.caption(
-            st.session_state.role
+            f"Logged in as: "
+            f"{st.session_state.role}"
         )
 
         st.divider()
@@ -1800,39 +1954,28 @@ def app():
         if (
             st.session_state.role
             ==
-            "Super Admin"
+            "Admin"
         ):
 
             pages = [
-
                 "🏠 Dashboard",
-
                 "🎓 Students",
-
-                "📷 Attendance + Camera",
-
+                "📷 Smart Attendance",
+                "👥 Smart Occupancy",
                 "👨‍🏫 Teachers",
-
                 "📊 Reports",
-
-                "⚙️ Settings"
-
+                "⚙️ Settings",
             ]
 
         else:
 
             pages = [
-
                 "🏠 Dashboard",
-
                 "🎓 Students",
-
-                "📷 Attendance + Camera",
-
+                "📷 Smart Attendance",
+                "👥 Smart Occupancy",
                 "📊 Reports",
-
-                "⚙️ Settings"
-
+                "⚙️ Settings",
             ]
 
         page = st.radio(
@@ -1856,13 +1999,29 @@ def app():
 
         students_page()
 
-    elif page == "📷 Attendance + Camera":
+    elif page == "📷 Smart Attendance":
 
         attendance_page()
 
+    elif page == "👥 Smart Occupancy":
+
+        smart_occupancy_page()
+
     elif page == "👨‍🏫 Teachers":
 
-        teacher_management()
+        if (
+            st.session_state.role
+            ==
+            "Admin"
+        ):
+
+            teacher_management()
+
+        else:
+
+            st.error(
+                "Admin access required."
+            )
 
     elif page == "📊 Reports":
 
@@ -1874,7 +2033,7 @@ def app():
 
 
 # ============================================================
-# START
+# START EDVISION
 # ============================================================
 
 if not st.session_state.logged_in:
