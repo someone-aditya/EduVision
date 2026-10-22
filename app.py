@@ -1184,7 +1184,7 @@ def attendance_page():
         "to reduce time spent taking attendance manually."
     )
 
-        camera_tab, manual_tab, history_tab = st.tabs(
+    camera_tab, manual_tab, history_tab = st.tabs(
         [
             "📷 Camera",
             "✋ Attendance",
@@ -1210,8 +1210,9 @@ def attendance_page():
             )
 
             st.code(str(error))
+
     # --------------------------------------------------------
-    # ATTENDANCE
+    # MANUAL ATTENDANCE
     # --------------------------------------------------------
 
     with manual_tab:
@@ -1226,9 +1227,7 @@ def attendance_page():
 
             student_options = {}
 
-            for _, student in (
-                students.iterrows()
-            ):
+            for _, student in students.iterrows():
 
                 class_name = student.get(
                     "class_name",
@@ -1241,19 +1240,13 @@ def attendance_page():
                 )
 
                 if class_name:
-                    label += (
-                        f" — {class_name}"
-                    )
+                    label += f" — {class_name}"
 
-                student_options[
-                    label
-                ] = student
+                student_options[label] = student
 
             selected = st.selectbox(
                 "Select Student",
-                list(
-                    student_options.keys()
-                ),
+                list(student_options.keys()),
                 key="attendance_student"
             )
 
@@ -1270,11 +1263,9 @@ def attendance_page():
                 "✅ Save Attendance"
             ):
 
-                student = (
-                    student_options[
-                        selected
-                    ]
-                )
+                student = student_options[
+                    selected
+                ]
 
                 now = datetime.now()
 
@@ -1293,57 +1284,42 @@ def attendance_page():
 
                 existing_mask = (
                     (
-                        attendance[
-                            "student_id"
-                        ]
+                        attendance["student_id"]
                         ==
                         student_id
                     )
                     &
                     (
-                        attendance[
-                            "date"
-                        ]
+                        attendance["date"]
                         ==
                         date
                     )
                 )
 
                 record = {
-                    "student_id":
-                        student_id,
+                    "student_id": student_id,
 
-                    "name":
-                        student.get(
-                            "name",
-                            ""
-                        ),
+                    "name": student.get(
+                        "name",
+                        ""
+                    ),
 
-                    "class_name":
-                        student.get(
-                            "class_name",
-                            ""
-                        ),
+                    "class_name": student.get(
+                        "class_name",
+                        ""
+                    ),
 
-                    "date":
-                        date,
-
-                    "time":
-                        time,
-
-                    "status":
-                        status
+                    "date": date,
+                    "time": time,
+                    "status": status
                 }
 
                 if (
                     not attendance.empty
-                    and
-                    existing_mask.any()
+                    and existing_mask.any()
                 ):
 
-                    for key, value in (
-                        record.items()
-                    ):
+                    for key, value in record.items():
 
                         attendance.loc[
                             existing_mask,
@@ -1376,9 +1352,7 @@ def attendance_page():
 
     with history_tab:
 
-        attendance = (
-            load_attendance()
-        )
+        attendance = load_attendance()
 
         if attendance.empty:
 
@@ -1393,8 +1367,6 @@ def attendance_page():
                 use_container_width=True,
                 hide_index=True
             )
-
-
 # ============================================================
 # SMART OCCUPANCY
 # ============================================================
