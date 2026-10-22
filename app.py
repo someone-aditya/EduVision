@@ -1,17 +1,15 @@
 import os
-import json
 import hashlib
-from datetime import datetime
-from pathlib import Path
+import secrets
+from datetime import datetime, timezone
 
 import pandas as pd
 import streamlit as st
+from supabase import create_client
 
 
 # ============================================================
 # EDVISION
-# Admin + Teacher
-# Smart Attendance + Smart Occupancy
 # ============================================================
 
 st.set_page_config(
@@ -23,294 +21,23 @@ st.set_page_config(
 
 
 # ============================================================
-# PATHS
+# CONFIGURATION
 # ============================================================
 
-BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR / "data"
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 
-DATA_DIR.mkdir(
-    parents=True,
-    exist_ok=True
-)
-
-STUDENTS_FILE = DATA_DIR / "students.csv"
-ATTENDANCE_FILE = DATA_DIR / "attendance.csv"
-USERS_FILE = DATA_DIR / "users.json"
-
-
-# ============================================================
-# ADMIN LOGIN
-# ============================================================
-
-ADMIN_ID = os.getenv(
+# Main EduVision administrator.
+# You can change these later in Render Environment Variables.
+EDUVISION_ADMIN_ID = os.getenv(
     "EDUVISION_ADMIN_ID",
     "12126"
 )
 
-ADMIN_PASSWORD = os.getenv(
+EDUVISION_ADMIN_PASSWORD = os.getenv(
     "EDUVISION_ADMIN_PASSWORD",
     "12126"
 )
-
-
-# ============================================================
-# COLUMNS
-# ============================================================
-
-STUDENT_COLUMNS = [
-    "student_id",
-    "name",
-    "class_name",
-    "roll_no",
-    "status",
-]
-
-ATTENDANCE_COLUMNS = [
-    "student_id",
-    "name",
-    "class_name",
-    "date",
-    "time",
-    "status",
-]
-
-
-# ============================================================
-# PASSWORD
-# ============================================================
-
-def password_hash(password):
-    return hashlib.sha256(
-        str(password).encode("utf-8")
-    ).hexdigest()
-
-
-# ============================================================
-# INITIAL FILE SETUP
-# ============================================================
-
-def setup_files():
-
-    if not STUDENTS_FILE.exists():
-
-        pd.DataFrame(
-            columns=STUDENT_COLUMNS
-        ).to_csv(
-            STUDENTS_FILE,
-            index=False
-        )
-
-    if not ATTENDANCE_FILE.exists():
-
-        pd.DataFrame(
-            columns=ATTENDANCE_COLUMNS
-        ).to_csv(
-            ATTENDANCE_FILE,
-            index=False
-        )
-
-    if not USERS_FILE.exists():
-
-        users = {
-            "admin": {
-                "id": ADMIN_ID,
-                "password_hash": password_hash(
-                    ADMIN_PASSWORD
-                )
-            },
-            "teachers": {}
-        }
-
-        USERS_FILE.write_text(
-            json.dumps(
-                users,
-                indent=2
-            ),
-            encoding="utf-8"
-        )
-
-
-# ============================================================
-# USERS
-# ============================================================
-
-def load_users():
-
-    try:
-
-        users = json.loads(
-            USERS_FILE.read_text(
-                encoding="utf-8"
-            )
-        )
-
-        if "admin" not in users:
-
-            users["admin"] = {
-                "id": ADMIN_ID,
-                "password_hash": password_hash(
-                    ADMIN_PASSWORD
-                )
-            }
-
-        if "teachers" not in users:
-            users["teachers"] = {}
-
-        return users
-
-    except Exception:
-
-        return {
-            "admin": {
-                "id": ADMIN_ID,
-                "password_hash": password_hash(
-                    ADMIN_PASSWORD
-                )
-            },
-            "teachers": {}
-        }
-
-
-def save_users(users):
-
-    USERS_FILE.write_text(
-        json.dumps(
-            users,
-            indent=2
-        ),
-        encoding="utf-8"
-    )
-
-
-# ============================================================
-# STUDENTS
-# ============================================================
-
-def load_students():
-
-    try:
-
-        df = pd.read_csv(
-            STUDENTS_FILE,
-            dtype=str
-        ).fillna("")
-
-        rename_map = {}
-
-        if (
-            "class" in df.columns
-            and "class_name" not in df.columns
-        ):
-            rename_map["class"] = "class_name"
-
-        if (
-            "student_name" in df.columns
-            and "name" not in df.columns
-        ):
-            rename_map["student_name"] = "name"
-
-        if (
-            "id" in df.columns
-            and "student_id" not in df.columns
-        ):
-            rename_map["id"] = "student_id"
-
-        if rename_map:
-
-            df = df.rename(
-                columns=rename_map
-            )
-
-        for column in STUDENT_COLUMNS:
-
-            if column not in df.columns:
-                df[column] = ""
-
-        df = df[
-            STUDENT_COLUMNS
-        ].copy()
-
-        return df
-
-    except Exception:
-
-        return pd.DataFrame(
-            columns=STUDENT_COLUMNS
-        )
-
-
-def save_students(df):
-
-    for column in STUDENT_COLUMNS:
-
-        if column not in df.columns:
-            df[column] = ""
-
-    df[
-        STUDENT_COLUMNS
-    ].to_csv(
-        STUDENTS_FILE,
-        index=False
-    )
-
-
-# ============================================================
-# ATTENDANCE
-# ============================================================
-
-def load_attendance():
-
-    try:
-
-        df = pd.read_csv(
-            ATTENDANCE_FILE,
-            dtype=str
-        ).fillna("")
-
-        if (
-            "class" in df.columns
-            and "class_name" not in df.columns
-        ):
-
-            df = df.rename(
-                columns={
-                    "class": "class_name"
-                }
-            )
-
-        for column in ATTENDANCE_COLUMNS:
-
-            if column not in df.columns:
-                df[column] = ""
-
-        return df[
-            ATTENDANCE_COLUMNS
-        ].copy()
-
-    except Exception:
-
-        return pd.DataFrame(
-            columns=ATTENDANCE_COLUMNS
-        )
-
-
-def save_attendance(df):
-
-    for column in ATTENDANCE_COLUMNS:
-
-        if column not in df.columns:
-            df[column] = ""
-
-    df[
-        ATTENDANCE_COLUMNS
-    ].to_csv(
-        ATTENDANCE_FILE,
-        index=False
-    )
-
-
-setup_files()
 
 
 # ============================================================
@@ -324,13 +51,13 @@ st.markdown(
     .stApp {
         background:
             radial-gradient(
-                circle at 10% 15%,
-                rgba(139,92,246,.16),
+                circle at 10% 10%,
+                rgba(124,58,237,.18),
                 transparent 28%
             ),
             radial-gradient(
-                circle at 90% 70%,
-                rgba(34,211,238,.12),
+                circle at 90% 75%,
+                rgba(6,182,212,.13),
                 transparent 30%
             ),
             linear-gradient(
@@ -346,10 +73,15 @@ st.markdown(
     .block-container {
         max-width: 1400px;
         padding-top: 1.5rem;
+        padding-bottom: 4rem;
     }
 
     h1, h2, h3 {
         color: #f8fafc !important;
+    }
+
+    p {
+        color: #cbd5e1;
     }
 
     div[data-baseweb="input"] {
@@ -358,9 +90,9 @@ st.markdown(
     }
 
     div[data-baseweb="input"] input {
-        color: black !important;
+        color: #020617 !important;
         background: white !important;
-        -webkit-text-fill-color: black !important;
+        -webkit-text-fill-color: #020617 !important;
     }
 
     input::placeholder {
@@ -385,10 +117,16 @@ st.markdown(
 
     div.stButton > button {
         width: 100%;
+        min-height: 45px;
+
         color: white !important;
         font-weight: 800;
+
         border-radius: 14px;
-        border: 1px solid rgba(34,211,238,.40);
+
+        border:
+            1px solid
+            rgba(34,211,238,.35);
 
         background:
             linear-gradient(
@@ -399,11 +137,22 @@ st.markdown(
             );
     }
 
+    div.stButton > button:hover {
+        border:
+            1px solid
+            rgba(255,255,255,.65);
+    }
+
     [data-testid="stMetric"] {
         padding: 18px;
         border-radius: 18px;
-        background: rgba(15,23,42,.85);
-        border: 1px solid rgba(139,92,246,.20);
+
+        background:
+            rgba(15,23,42,.82);
+
+        border:
+            1px solid
+            rgba(139,92,246,.22);
     }
 
     [data-testid="stMetricValue"] {
@@ -411,7 +160,8 @@ st.markdown(
     }
 
     [data-testid="stSidebar"] {
-        background: rgba(2,6,23,.98);
+        background:
+            rgba(2,6,23,.98);
     }
 
     [data-testid="stSidebar"] * {
@@ -428,147 +178,1194 @@ st.markdown(
 
     </style>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
+
+
+# ============================================================
+# SUPABASE
+# ============================================================
+
+@st.cache_resource
+def get_database():
+
+    if not SUPABASE_URL:
+        raise RuntimeError(
+            "SUPABASE_URL is missing from Render."
+        )
+
+    if not SUPABASE_KEY:
+        raise RuntimeError(
+            "SUPABASE_KEY is missing from Render."
+        )
+
+    return create_client(
+        SUPABASE_URL,
+        SUPABASE_KEY
+    )
+
+
+try:
+
+    db = get_database()
+
+except Exception as error:
+
+    st.error(
+        "EduVision could not connect to its database."
+    )
+
+    st.code(
+        str(error)
+    )
+
+    st.stop()
+
+
+# ============================================================
+# SECURITY
+# ============================================================
+
+def hash_password(password):
+
+    return hashlib.sha256(
+        str(password).encode("utf-8")
+    ).hexdigest()
+
+
+def generate_school_id():
+
+    return (
+        "SCH-"
+        +
+        secrets.token_hex(3).upper()
+    )
 
 
 # ============================================================
 # SESSION
 # ============================================================
 
-if "logged_in" not in st.session_state:
+DEFAULT_SESSION = {
+    "screen": "home",
+    "logged_in": False,
+    "role": None,
+    "school_id": None,
+    "school_name": None,
+    "user_id": None,
+    "user_name": None,
+}
+
+
+for key, value in DEFAULT_SESSION.items():
+
+    if key not in st.session_state:
+
+        st.session_state[key] = value
+
+
+def clear_login():
+
     st.session_state.logged_in = False
-
-if "role" not in st.session_state:
     st.session_state.role = None
-
-if "user_id" not in st.session_state:
+    st.session_state.school_id = None
+    st.session_state.school_name = None
     st.session_state.user_id = None
+    st.session_state.user_name = None
+
+
+def go_home():
+
+    clear_login()
+
+    st.session_state.screen = "home"
+
+    st.rerun()
 
 
 # ============================================================
-# LOGIN
+# DATABASE HELPERS
 # ============================================================
 
-def login_page():
+def get_school(school_id):
 
-    st.title("🎓 EduVision")
+    try:
+
+        response = (
+            db.table("schools")
+            .select("*")
+            .eq(
+                "school_id",
+                school_id.strip()
+            )
+            .execute()
+        )
+
+        if response.data:
+
+            return response.data[0]
+
+    except Exception:
+
+        pass
+
+    return None
+
+
+def get_school_by_admin(
+    school_id,
+    admin_id
+):
+
+    try:
+
+        response = (
+            db.table("schools")
+            .select("*")
+            .eq(
+                "school_id",
+                school_id
+            )
+            .eq(
+                "admin_id",
+                admin_id
+            )
+            .execute()
+        )
+
+        if response.data:
+
+            return response.data[0]
+
+    except Exception:
+
+        pass
+
+    return None
+
+
+def get_teacher(
+    school_id,
+    teacher_id
+):
+
+    try:
+
+        response = (
+            db.table("teachers")
+            .select("*")
+            .eq(
+                "school_id",
+                school_id
+            )
+            .eq(
+                "teacher_id",
+                teacher_id
+            )
+            .execute()
+        )
+
+        if response.data:
+
+            return response.data[0]
+
+    except Exception:
+
+        pass
+
+    return None
+
+
+def load_students():
+
+    try:
+
+        response = (
+            db.table("students")
+            .select("*")
+            .eq(
+                "school_id",
+                st.session_state.school_id
+            )
+            .order(
+                "name"
+            )
+            .execute()
+        )
+
+        if response.data:
+
+            return pd.DataFrame(
+                response.data
+            )
+
+    except Exception as error:
+
+        st.error(
+            f"Could not load students: {error}"
+        )
+
+    return pd.DataFrame()
+
+
+def load_attendance():
+
+    try:
+
+        response = (
+            db.table("attendance")
+            .select("*")
+            .eq(
+                "school_id",
+                st.session_state.school_id
+            )
+            .order(
+                "created_at",
+                desc=True
+            )
+            .execute()
+        )
+
+        if response.data:
+
+            return pd.DataFrame(
+                response.data
+            )
+
+    except Exception as error:
+
+        st.error(
+            f"Could not load attendance: {error}"
+        )
+
+    return pd.DataFrame()
+
+
+# ============================================================
+# HOME
+# ============================================================
+
+def home_page():
+
+    st.title(
+        "🎓 EduVision"
+    )
 
     st.subheader(
         "AI • SMART CLASSROOM"
     )
 
     st.write(
-        "Smarter classrooms through automated attendance, "
-        "classroom monitoring and simple management."
+        "Smarter classrooms through automated "
+        "attendance, classroom monitoring and "
+        "simple school management."
     )
 
     st.success(
-        "🟢 System Online"
+        "🟢 EduVision Online"
     )
 
     st.divider()
 
-    left, middle, right = st.columns(
-        [1, 1.2, 1]
+    st.subheader(
+        "Welcome to EduVision"
     )
 
-    with middle:
+    col1, col2 = st.columns(2)
+
+    with col1:
 
         st.subheader(
-            "✨ Welcome Back"
+            "🏫 School"
         )
 
-        role = st.selectbox(
-            "Login as",
-            [
-                "Admin",
-                "Teacher"
-            ]
-        )
-
-        user_id = st.text_input(
-            "ID"
-        )
-
-        password = st.text_input(
-            "Password",
-            type="password"
+        st.write(
+            "Register a school or open an "
+            "approved school."
         )
 
         if st.button(
-            "✨ Sign In",
+            "🏫 School Portal",
             use_container_width=True
         ):
 
-            users = load_users()
+            st.session_state.screen = (
+                "school_portal"
+            )
 
-            valid = False
+            st.rerun()
 
-            if role == "Admin":
+    with col2:
 
-                admin = users.get(
-                    "admin",
-                    {}
+        st.subheader(
+            "👑 EduVision Admin"
+        )
+
+        st.write(
+            "Review and approve school "
+            "registration requests."
+        )
+
+        if st.button(
+            "👑 Admin Portal",
+            use_container_width=True
+        ):
+
+            st.session_state.screen = (
+                "platform_admin_login"
+            )
+
+            st.rerun()
+
+
+# ============================================================
+# SCHOOL PORTAL
+# ============================================================
+
+def school_portal():
+
+    st.title(
+        "🏫 School Portal"
+    )
+
+    st.write(
+        "Register your school or open an "
+        "existing approved school."
+    )
+
+    if st.button(
+        "← Back to EduVision"
+    ):
+
+        go_home()
+
+    st.divider()
+
+    register_tab, open_tab = st.tabs(
+        [
+            "📝 Register School",
+            "🏫 Open School",
+        ]
+    )
+
+    # --------------------------------------------------------
+    # REGISTER SCHOOL
+    # --------------------------------------------------------
+
+    with register_tab:
+
+        st.subheader(
+            "Register Your School"
+        )
+
+        st.info(
+            "After registration, an EduVision "
+            "Admin must approve your school."
+        )
+
+        school_name = st.text_input(
+            "School Name",
+            key="register_school_name"
+        )
+
+        admin_id = st.text_input(
+            "School Admin ID",
+            key="register_admin_id"
+        )
+
+        admin_password = st.text_input(
+            "Admin Password",
+            type="password",
+            key="register_admin_password"
+        )
+
+        confirm_password = st.text_input(
+            "Confirm Admin Password",
+            type="password",
+            key="register_admin_confirm"
+        )
+
+        if st.button(
+            "✨ Submit School Registration"
+        ):
+
+            school_name = (
+                school_name.strip()
+            )
+
+            admin_id = (
+                admin_id.strip()
+            )
+
+            if not school_name:
+
+                st.error(
+                    "Enter your school name."
                 )
 
-                valid = (
-                    user_id == admin.get("id")
-                    and
-                    password_hash(password)
-                    ==
-                    admin.get("password_hash")
+            elif not admin_id:
+
+                st.error(
+                    "Enter an Admin ID."
                 )
 
-            elif role == "Teacher":
+            elif len(admin_password) < 6:
 
-                teacher = (
-                    users
-                    .get(
-                        "teachers",
-                        {}
-                    )
-                    .get(
-                        user_id,
-                        {}
-                    )
+                st.error(
+                    "Use a password with at least "
+                    "6 characters."
                 )
 
-                valid = (
-                    bool(teacher)
-                    and
-                    teacher.get(
-                        "enabled",
-                        True
-                    )
-                    and
-                    password_hash(password)
-                    ==
-                    teacher.get(
-                        "password_hash"
-                    )
+            elif (
+                admin_password
+                !=
+                confirm_password
+            ):
+
+                st.error(
+                    "Passwords do not match."
                 )
 
-            if valid:
+            else:
+
+                school_id = (
+                    generate_school_id()
+                )
+
+                try:
+
+                    db.table(
+                        "schools"
+                    ).insert(
+                        {
+                            "school_id":
+                                school_id,
+
+                            "school_name":
+                                school_name,
+
+                            "admin_id":
+                                admin_id,
+
+                            "admin_password_hash":
+                                hash_password(
+                                    admin_password
+                                ),
+
+                            "approval_status":
+                                "pending",
+                        }
+                    ).execute()
+
+                    st.success(
+                        "🎉 School registration "
+                        "submitted!"
+                    )
+
+                    st.info(
+                        f"Your School ID is: "
+                        f"{school_id}"
+                    )
+
+                    st.warning(
+                        "SAVE THIS SCHOOL ID. "
+                        "You will need it to open "
+                        "your school after approval."
+                    )
+
+                except Exception as error:
+
+                    st.error(
+                        "School registration failed."
+                    )
+
+                    st.code(
+                        str(error)
+                    )
+
+    # --------------------------------------------------------
+    # OPEN SCHOOL
+    # --------------------------------------------------------
+
+    with open_tab:
+
+        st.subheader(
+            "Open School"
+        )
+
+        school_id = st.text_input(
+            "School ID",
+            placeholder="SCH-XXXXXX",
+            key="open_school_id"
+        )
+
+        if st.button(
+            "🏫 Open School"
+        ):
+
+            school_id = (
+                school_id
+                .strip()
+                .upper()
+            )
+
+            school = get_school(
+                school_id
+            )
+
+            if not school:
+
+                st.error(
+                    "School ID not found."
+                )
+
+            else:
+
+                status = school.get(
+                    "approval_status",
+                    "pending"
+                )
+
+                if status == "pending":
+
+                    st.warning(
+                        "⏳ This school is waiting "
+                        "for EduVision Admin approval."
+                    )
+
+                elif status == "rejected":
+
+                    st.error(
+                        "❌ This school registration "
+                        "was rejected."
+                    )
+
+                elif status != "approved":
+
+                    st.warning(
+                        "This school is not active yet."
+                    )
+
+                else:
+
+                    st.session_state.school_id = (
+                        school["school_id"]
+                    )
+
+                    st.session_state.school_name = (
+                        school["school_name"]
+                    )
+
+                    st.session_state.screen = (
+                        "school_login"
+                    )
+
+                    st.rerun()
+
+
+# ============================================================
+# MAIN EDVISION ADMIN LOGIN
+# ============================================================
+
+def platform_admin_login():
+
+    st.title(
+        "👑 EduVision Admin"
+    )
+
+    st.write(
+        "Approve and manage schools using EduVision."
+    )
+
+    if st.button(
+        "← Back"
+    ):
+
+        go_home()
+
+    st.divider()
+
+    admin_id = st.text_input(
+        "EduVision Admin ID"
+    )
+
+    password = st.text_input(
+        "Password",
+        type="password"
+    )
+
+    if st.button(
+        "🔐 Admin Login"
+    ):
+
+        if (
+            admin_id
+            ==
+            EDUVISION_ADMIN_ID
+            and
+            password
+            ==
+            EDUVISION_ADMIN_PASSWORD
+        ):
+
+            st.session_state.logged_in = True
+            st.session_state.role = (
+                "EduVision Admin"
+            )
+
+            st.session_state.user_id = (
+                admin_id
+            )
+
+            st.session_state.screen = (
+                "platform_admin"
+            )
+
+            st.rerun()
+
+        else:
+
+            st.error(
+                "Incorrect EduVision Admin login."
+            )
+
+
+# ============================================================
+# MAIN EDVISION ADMIN PANEL
+# ============================================================
+
+def platform_admin_page():
+
+    st.title(
+        "👑 EduVision Administration"
+    )
+
+    st.write(
+        "Review school registrations and control "
+        "which schools can use EduVision."
+    )
+
+    try:
+
+        response = (
+            db.table("schools")
+            .select("*")
+            .order(
+                "created_at",
+                desc=True
+            )
+            .execute()
+        )
+
+        schools = response.data or []
+
+    except Exception as error:
+
+        st.error(
+            str(error)
+        )
+
+        schools = []
+
+    pending = [
+        school
+        for school in schools
+        if school.get(
+            "approval_status"
+        )
+        ==
+        "pending"
+    ]
+
+    approved = [
+        school
+        for school in schools
+        if school.get(
+            "approval_status"
+        )
+        ==
+        "approved"
+    ]
+
+    rejected = [
+        school
+        for school in schools
+        if school.get(
+            "approval_status"
+        )
+        ==
+        "rejected"
+    ]
+
+    c1, c2, c3 = st.columns(3)
+
+    c1.metric(
+        "⏳ Pending",
+        len(pending)
+    )
+
+    c2.metric(
+        "✅ Approved",
+        len(approved)
+    )
+
+    c3.metric(
+        "❌ Rejected",
+        len(rejected)
+    )
+
+    tab1, tab2, tab3 = st.tabs(
+        [
+            "⏳ School Requests",
+            "✅ Approved Schools",
+            "❌ Rejected",
+        ]
+    )
+
+    # --------------------------------------------------------
+    # PENDING
+    # --------------------------------------------------------
+
+    with tab1:
+
+        if not pending:
+
+            st.info(
+                "No pending school requests."
+            )
+
+        for school in pending:
+
+            st.subheader(
+                school.get(
+                    "school_name",
+                    "School"
+                )
+            )
+
+            st.write(
+                "School ID:",
+                school.get(
+                    "school_id"
+                )
+            )
+
+            st.write(
+                "School Admin ID:",
+                school.get(
+                    "admin_id"
+                )
+            )
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+
+                if st.button(
+                    "✅ Approve",
+                    key=(
+                        "approve_"
+                        +
+                        school["school_id"]
+                    )
+                ):
+
+                    try:
+
+                        db.table(
+                            "schools"
+                        ).update(
+                            {
+                                "approval_status":
+                                    "approved",
+
+                                "approved_at":
+                                    datetime.now(
+                                        timezone.utc
+                                    ).isoformat(),
+
+                                "approved_by":
+                                    st.session_state.user_id,
+                            }
+                        ).eq(
+                            "school_id",
+                            school[
+                                "school_id"
+                            ]
+                        ).execute()
+
+                        st.success(
+                            "School approved."
+                        )
+
+                        st.rerun()
+
+                    except Exception as error:
+
+                        st.error(
+                            str(error)
+                        )
+
+            with col2:
+
+                if st.button(
+                    "❌ Reject",
+                    key=(
+                        "reject_"
+                        +
+                        school["school_id"]
+                    )
+                ):
+
+                    try:
+
+                        db.table(
+                            "schools"
+                        ).update(
+                            {
+                                "approval_status":
+                                    "rejected"
+                            }
+                        ).eq(
+                            "school_id",
+                            school[
+                                "school_id"
+                            ]
+                        ).execute()
+
+                        st.rerun()
+
+                    except Exception as error:
+
+                        st.error(
+                            str(error)
+                        )
+
+            st.divider()
+
+    # --------------------------------------------------------
+    # APPROVED
+    # --------------------------------------------------------
+
+    with tab2:
+
+        if not approved:
+
+            st.info(
+                "No approved schools yet."
+            )
+
+        else:
+
+            rows = []
+
+            for school in approved:
+
+                rows.append(
+                    {
+                        "School":
+                            school.get(
+                                "school_name",
+                                ""
+                            ),
+
+                        "School ID":
+                            school.get(
+                                "school_id",
+                                ""
+                            ),
+
+                        "Admin ID":
+                            school.get(
+                                "admin_id",
+                                ""
+                            ),
+
+                        "Status":
+                            "Approved",
+                    }
+                )
+
+            st.dataframe(
+                pd.DataFrame(rows),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+    # --------------------------------------------------------
+    # REJECTED
+    # --------------------------------------------------------
+
+    with tab3:
+
+        if not rejected:
+
+            st.info(
+                "No rejected schools."
+            )
+
+        else:
+
+            for school in rejected:
+
+                st.write(
+                    f"❌ "
+                    f"{school.get('school_name')} "
+                    f"— {school.get('school_id')}"
+                )
+
+                if st.button(
+                    "Restore to Pending",
+                    key=(
+                        "restore_"
+                        +
+                        school["school_id"]
+                    )
+                ):
+
+                    db.table(
+                        "schools"
+                    ).update(
+                        {
+                            "approval_status":
+                                "pending"
+                        }
+                    ).eq(
+                        "school_id",
+                        school[
+                            "school_id"
+                        ]
+                    ).execute()
+
+                    st.rerun()
+
+    st.divider()
+
+    if st.button(
+        "🚪 Log Out"
+    ):
+
+        go_home()
+
+
+# ============================================================
+# SCHOOL LOGIN
+# ============================================================
+
+def school_login():
+
+    school_id = (
+        st.session_state.school_id
+    )
+
+    school = get_school(
+        school_id
+    )
+
+    if not school:
+
+        st.error(
+            "School could not be found."
+        )
+
+        if st.button(
+            "Return Home"
+        ):
+
+            go_home()
+
+        return
+
+    st.title(
+        f"🏫 {school['school_name']}"
+    )
+
+    st.write(
+        f"School ID: {school_id}"
+    )
+
+    if st.button(
+        "← Change School"
+    ):
+
+        clear_login()
+
+        st.session_state.screen = (
+            "school_portal"
+        )
+
+        st.rerun()
+
+    st.divider()
+
+    admin_tab, teacher_tab = st.tabs(
+        [
+            "👨‍💼 School Admin",
+            "👨‍🏫 Teacher",
+        ]
+    )
+
+    # --------------------------------------------------------
+    # SCHOOL ADMIN
+    # --------------------------------------------------------
+
+    with admin_tab:
+
+        st.subheader(
+            "School Admin Login"
+        )
+
+        admin_id = st.text_input(
+            "Admin ID",
+            key="school_admin_id"
+        )
+
+        password = st.text_input(
+            "Admin Password",
+            type="password",
+            key="school_admin_password"
+        )
+
+        if st.button(
+            "Login as Admin"
+        ):
+
+            admin_id = admin_id.strip()
+
+            school_account = (
+                get_school_by_admin(
+                    school_id,
+                    admin_id
+                )
+            )
+
+            if (
+                school_account
+                and
+                hash_password(password)
+                ==
+                school_account.get(
+                    "admin_password_hash"
+                )
+            ):
 
                 st.session_state.logged_in = True
-                st.session_state.role = role
-                st.session_state.user_id = user_id
+                st.session_state.role = (
+                    "School Admin"
+                )
+
+                st.session_state.user_id = (
+                    admin_id
+                )
+
+                st.session_state.user_name = (
+                    school["school_name"]
+                    +
+                    " Admin"
+                )
+
+                st.session_state.screen = (
+                    "school_app"
+                )
 
                 st.rerun()
 
             else:
 
                 st.error(
-                    "Incorrect ID or password."
+                    "Incorrect Admin ID or password."
                 )
 
+    # --------------------------------------------------------
+    # TEACHER
+    # --------------------------------------------------------
+
+    with teacher_tab:
+
+        st.subheader(
+            "Teacher Login"
+        )
+
+        teacher_id = st.text_input(
+            "Teacher ID",
+            key="teacher_login_id"
+        )
+
+        password = st.text_input(
+            "Teacher Password",
+            type="password",
+            key="teacher_login_password"
+        )
+
+        if st.button(
+            "Login as Teacher"
+        ):
+
+            teacher_id = (
+                teacher_id.strip()
+            )
+
+            teacher = get_teacher(
+                school_id,
+                teacher_id
+            )
+
+            if not teacher:
+
+                st.error(
+                    "Teacher account not found."
+                )
+
+            elif not teacher.get(
+                "enabled",
+                True
+            ):
+
+                st.error(
+                    "This teacher account "
+                    "is disabled."
+                )
+
+            elif (
+                hash_password(password)
+                !=
+                teacher.get(
+                    "password_hash"
+                )
+            ):
+
+                st.error(
+                    "Incorrect password."
+                )
+
+            else:
+
+                st.session_state.logged_in = True
+                st.session_state.role = "Teacher"
+
+                st.session_state.user_id = (
+                    teacher_id
+                )
+
+                st.session_state.user_name = (
+                    teacher.get(
+                        "teacher_name",
+                        teacher_id
+                    )
+                )
+
+                st.session_state.screen = (
+                    "school_app"
+                )
+
+                st.rerun()
+
 
 # ============================================================
-# DASHBOARD
+# SCHOOL DASHBOARD
 # ============================================================
 
-def dashboard():
+def dashboard_page():
 
     students = load_students()
     attendance = load_attendance()
@@ -577,46 +1374,41 @@ def dashboard():
         "%Y-%m-%d"
     )
 
+    present_today = 0
+
     if not attendance.empty:
 
-        today_data = attendance[
-            attendance["date"] == today
-        ]
+        if "attendance_date" in attendance.columns:
 
-    else:
-
-        today_data = attendance
-
-    present = 0
-
-    if not today_data.empty:
-
-        present = len(
-            today_data[
-                today_data["status"]
+            today_rows = attendance[
+                attendance[
+                    "attendance_date"
+                ].astype(str)
                 ==
-                "Present"
+                today
             ]
-        )
+
+            if "status" in today_rows.columns:
+
+                present_today = len(
+                    today_rows[
+                        today_rows["status"]
+                        ==
+                        "Present"
+                    ]
+                )
 
     st.title(
-        "🎓 EduVision"
+        f"🏫 {st.session_state.school_name}"
     )
 
     st.subheader(
-        "Smart Classroom Management"
-    )
-
-    st.write(
-        "Automated attendance and classroom monitoring "
-        "so teachers can spend more time teaching."
+        "EduVision Smart Classroom"
     )
 
     st.success(
         "🟢 System Online"
     )
-
-    st.divider()
 
     c1, c2, c3, c4 = st.columns(4)
 
@@ -627,7 +1419,7 @@ def dashboard():
 
     c2.metric(
         "✅ Present Today",
-        present
+        present_today
     )
 
     c3.metric(
@@ -636,17 +1428,24 @@ def dashboard():
     )
 
     c4.metric(
-        "👤 Access",
+        "👤 Account",
         st.session_state.role
     )
 
+    st.divider()
+
     st.subheader(
-        "⚡ Quick Actions"
+        "Welcome"
+    )
+
+    st.write(
+        f"Signed in as "
+        f"{st.session_state.user_name or st.session_state.user_id}."
     )
 
     st.info(
-        "Use the sidebar to manage students, "
-        "take attendance and open Smart Occupancy."
+        "Use the sidebar to open Smart Attendance, "
+        "Smart Occupancy, students and reports."
     )
 
 
@@ -656,16 +1455,16 @@ def dashboard():
 
 def students_page():
 
-    students = load_students()
-
     st.title(
-        "🎓 Student Management"
+        "🎓 Students"
     )
 
-    if st.session_state.role == "Admin":
+    students = load_students()
+
+    if st.session_state.role == "School Admin":
 
         with st.expander(
-            "➕ Add New Student"
+            "➕ Add Student"
         ):
 
             c1, c2 = st.columns(2)
@@ -673,35 +1472,34 @@ def students_page():
             with c1:
 
                 student_id = st.text_input(
-                    "Student ID",
-                    key="new_student_id"
+                    "Student ID"
                 )
 
-                name = st.text_input(
-                    "Full Name",
-                    key="new_student_name"
+                student_name = st.text_input(
+                    "Student Name"
                 )
 
             with c2:
 
                 class_name = st.text_input(
-                    "Class",
-                    key="new_student_class"
+                    "Class"
                 )
 
                 roll_no = st.text_input(
-                    "Roll Number",
-                    key="new_student_roll"
+                    "Roll Number"
                 )
 
             if st.button(
                 "✨ Add Student"
             ):
 
-                student_id = student_id.strip()
-                name = name.strip()
-                class_name = class_name.strip()
-                roll_no = roll_no.strip()
+                student_id = (
+                    student_id.strip()
+                )
+
+                student_name = (
+                    student_name.strip()
+                )
 
                 if not student_id:
 
@@ -709,69 +1507,57 @@ def students_page():
                         "Enter Student ID."
                     )
 
-                elif not name:
+                elif not student_name:
 
                     st.error(
                         "Enter student name."
                     )
 
-                elif (
-                    not students.empty
-                    and
-                    student_id
-                    in students[
-                        "student_id"
-                    ].tolist()
-                ):
-
-                    st.error(
-                        "Student ID already exists."
-                    )
-
                 else:
 
-                    new_student = pd.DataFrame(
-                        [
+                    try:
+
+                        db.table(
+                            "students"
+                        ).insert(
                             {
+                                "school_id":
+                                    st.session_state.school_id,
+
                                 "student_id":
                                     student_id,
 
                                 "name":
-                                    name,
+                                    student_name,
 
                                 "class_name":
-                                    class_name,
+                                    class_name.strip(),
 
                                 "roll_no":
-                                    roll_no,
+                                    roll_no.strip(),
 
                                 "status":
-                                    "Active"
+                                    "Active",
                             }
-                        ]
-                    )
+                        ).execute()
 
-                    students = pd.concat(
-                        [
-                            students,
-                            new_student
-                        ],
-                        ignore_index=True
-                    )
+                        st.success(
+                            "Student added."
+                        )
 
-                    save_students(
-                        students
-                    )
+                        st.rerun()
 
-                    st.success(
-                        "Student added successfully."
-                    )
+                    except Exception as error:
 
-                    st.rerun()
+                        st.error(
+                            "Could not add student."
+                        )
 
-    st.subheader(
-        "Student List"
-    )
+                        st.code(
+                            str(error)
+                        )
+
+    students = load_students()
 
     if students.empty:
 
@@ -781,60 +1567,84 @@ def students_page():
 
     else:
 
+        visible_columns = [
+            column
+            for column in [
+                "student_id",
+                "name",
+                "class_name",
+                "roll_no",
+                "status",
+            ]
+            if column in students.columns
+        ]
+
         st.dataframe(
-            students,
+            students[
+                visible_columns
+            ],
             use_container_width=True,
-            hide_index=True
+            hide_index=True,
         )
 
-        if st.session_state.role == "Admin":
+    # --------------------------------------------------------
+    # DELETE STUDENT
+    # --------------------------------------------------------
 
-            st.divider()
+    if (
+        st.session_state.role
+        ==
+        "School Admin"
+        and
+        not students.empty
+    ):
 
-            st.subheader(
-                "🗑️ Remove Student"
+        st.divider()
+
+        st.subheader(
+            "🗑 Remove Student"
+        )
+
+        options = {}
+
+        for _, student in students.iterrows():
+
+            label = (
+                f"{student.get('student_id', '')}"
+                f" — "
+                f"{student.get('name', '')}"
             )
 
-            student_options = {}
-
-            for _, student in students.iterrows():
-
-                label = (
-                    f"{student['student_id']} — "
-                    f"{student['name']}"
-                )
-
-                student_options[
-                    label
-                ] = student[
+            options[label] = (
+                student.get(
                     "student_id"
-                ]
-
-            selected = st.selectbox(
-                "Select Student",
-                list(
-                    student_options.keys()
-                ),
-                key="delete_student"
+                )
             )
 
-            if st.button(
-                "Remove Selected Student"
-            ):
+        selected = st.selectbox(
+            "Select Student",
+            list(options.keys())
+        )
 
-                sid = student_options[
-                    selected
-                ]
+        if st.button(
+            "Remove Student"
+        ):
 
-                students = students[
-                    students["student_id"]
-                    !=
-                    sid
-                ]
+            student_id = (
+                options[selected]
+            )
 
-                save_students(
-                    students
-                )
+            try:
+
+                db.table(
+                    "students"
+                ).delete().eq(
+                    "school_id",
+                    st.session_state.school_id
+                ).eq(
+                    "student_id",
+                    student_id
+                ).execute()
 
                 st.success(
                     "Student removed."
@@ -842,38 +1652,310 @@ def students_page():
 
                 st.rerun()
 
+            except Exception as error:
+
+                st.error(
+                    str(error)
+                )
+
 
 # ============================================================
-# SMART ATTENDANCE
+# TEACHERS
+# ============================================================
+
+def teachers_page():
+
+    st.title(
+        "👨‍🏫 Teacher Management"
+    )
+
+    try:
+
+        response = (
+            db.table("teachers")
+            .select("*")
+            .eq(
+                "school_id",
+                st.session_state.school_id
+            )
+            .order(
+                "teacher_name"
+            )
+            .execute()
+        )
+
+        teachers = response.data or []
+
+    except Exception as error:
+
+        st.error(
+            str(error)
+        )
+
+        teachers = []
+
+    with st.expander(
+        "➕ Add Teacher"
+    ):
+
+        teacher_id = st.text_input(
+            "Teacher ID"
+        )
+
+        teacher_name = st.text_input(
+            "Teacher Name"
+        )
+
+        password = st.text_input(
+            "Temporary Password",
+            type="password"
+        )
+
+        if st.button(
+            "Create Teacher Account"
+        ):
+
+            teacher_id = (
+                teacher_id.strip()
+            )
+
+            teacher_name = (
+                teacher_name.strip()
+            )
+
+            if not teacher_id:
+
+                st.error(
+                    "Enter Teacher ID."
+                )
+
+            elif not teacher_name:
+
+                st.error(
+                    "Enter teacher name."
+                )
+
+            elif len(password) < 6:
+
+                st.error(
+                    "Password must contain "
+                    "at least 6 characters."
+                )
+
+            else:
+
+                try:
+
+                    db.table(
+                        "teachers"
+                    ).insert(
+                        {
+                            "school_id":
+                                st.session_state.school_id,
+
+                            "teacher_id":
+                                teacher_id,
+
+                            "teacher_name":
+                                teacher_name,
+
+                            "password_hash":
+                                hash_password(
+                                    password
+                                ),
+
+                            "enabled":
+                                True,
+                        }
+                    ).execute()
+
+                    st.success(
+                        "Teacher account created "
+                        "and saved permanently."
+                    )
+
+                    st.rerun()
+
+                except Exception as error:
+
+                    st.error(
+                        "Could not create teacher."
+                    )
+
+                    st.code(
+                        str(error)
+                    )
+
+    if not teachers:
+
+        st.info(
+            "No teacher accounts yet."
+        )
+
+        return
+
+    rows = []
+
+    for teacher in teachers:
+
+        rows.append(
+            {
+                "Teacher ID":
+                    teacher.get(
+                        "teacher_id",
+                        ""
+                    ),
+
+                "Name":
+                    teacher.get(
+                        "teacher_name",
+                        ""
+                    ),
+
+                "Status":
+                    (
+                        "Enabled"
+                        if teacher.get(
+                            "enabled",
+                            True
+                        )
+                        else
+                        "Disabled"
+                    ),
+            }
+        )
+
+    st.dataframe(
+        pd.DataFrame(rows),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    st.divider()
+
+    teacher_options = {}
+
+    for teacher in teachers:
+
+        label = (
+            f"{teacher.get('teacher_id')} "
+            f"— "
+            f"{teacher.get('teacher_name')}"
+        )
+
+        teacher_options[
+            label
+        ] = teacher
+
+    selected_label = st.selectbox(
+        "Manage Teacher",
+        list(
+            teacher_options.keys()
+        )
+    )
+
+    selected_teacher = (
+        teacher_options[
+            selected_label
+        ]
+    )
+
+    c1, c2 = st.columns(2)
+
+    with c1:
+
+        enabled = selected_teacher.get(
+            "enabled",
+            True
+        )
+
+        button_text = (
+            "Disable Teacher"
+            if enabled
+            else
+            "Enable Teacher"
+        )
+
+        if st.button(
+            button_text
+        ):
+
+            db.table(
+                "teachers"
+            ).update(
+                {
+                    "enabled":
+                        not enabled
+                }
+            ).eq(
+                "school_id",
+                st.session_state.school_id
+            ).eq(
+                "teacher_id",
+                selected_teacher[
+                    "teacher_id"
+                ]
+            ).execute()
+
+            st.rerun()
+
+    with c2:
+
+        if st.button(
+            "🗑 Delete Teacher"
+        ):
+
+            db.table(
+                "teachers"
+            ).delete().eq(
+                "school_id",
+                st.session_state.school_id
+            ).eq(
+                "teacher_id",
+                selected_teacher[
+                    "teacher_id"
+                ]
+            ).execute()
+
+            st.rerun()
+
+
+# ============================================================
+# ATTENDANCE
 # ============================================================
 
 def attendance_page():
-
-    students = load_students()
-    attendance = load_attendance()
 
     st.title(
         "📷 Smart Attendance"
     )
 
     st.write(
-        "Use AI face recognition or manually update "
-        "a student's attendance."
+        "Use AI face recognition or manually "
+        "record attendance."
     )
 
-    camera_tab, manual_tab, history_tab = st.tabs(
-        [
-            "🤖 AI Camera",
-            "✋ Manual",
-            "📋 History"
-        ]
+    students = load_students()
+
+    camera_tab, manual_tab, history_tab = (
+        st.tabs(
+            [
+                "🤖 AI Camera",
+                "✋ Manual",
+                "📋 History",
+            ]
+        )
     )
 
     # --------------------------------------------------------
-    # AI CAMERA
+    # CAMERA
     # --------------------------------------------------------
 
     with camera_tab:
+
+        st.info(
+            "AI camera module"
+        )
 
         try:
 
@@ -900,49 +1982,34 @@ def attendance_page():
         if students.empty:
 
             st.warning(
-                "Add at least one student first."
+                "Add a student first."
             )
 
         else:
 
-            student_options = {}
+            options = {}
 
             for _, student in students.iterrows():
 
-                class_name = student.get(
-                    "class_name",
-                    ""
-                )
-
                 label = (
-                    f"{student.get('student_id', '')} — "
+                    f"{student.get('student_id', '')}"
+                    f" — "
                     f"{student.get('name', '')}"
                 )
 
-                if class_name:
-
-                    label += (
-                        f" — {class_name}"
-                    )
-
-                student_options[
-                    label
-                ] = student
+                options[label] = student
 
             selected = st.selectbox(
-                "Select Student",
-                list(
-                    student_options.keys()
-                ),
-                key="attendance_student"
+                "Student",
+                list(options.keys())
             )
 
             status = st.selectbox(
-                "Attendance Status",
+                "Status",
                 [
                     "Present",
                     "Late",
-                    "Absent"
+                    "Absent",
                 ]
             )
 
@@ -950,46 +2017,33 @@ def attendance_page():
                 "✅ Save Attendance"
             ):
 
-                student = student_options[
+                student = options[
                     selected
                 ]
 
                 now = datetime.now()
 
-                date = now.strftime(
-                    "%Y-%m-%d"
-                )
-
-                time = now.strftime(
-                    "%H:%M:%S"
-                )
-
-                student_id = student.get(
-                    "student_id",
-                    ""
-                )
-
-                existing_mask = (
-                    (
-                        attendance[
-                            "student_id"
-                        ]
-                        ==
-                        student_id
+                attendance_date = (
+                    now.strftime(
+                        "%Y-%m-%d"
                     )
-                    &
-                    (
-                        attendance[
-                            "date"
-                        ]
-                        ==
-                        date
+                )
+
+                attendance_time = (
+                    now.strftime(
+                        "%H:%M:%S"
                     )
                 )
 
                 record = {
+                    "school_id":
+                        st.session_state.school_id,
+
                     "student_id":
-                        student_id,
+                        student.get(
+                            "student_id",
+                            ""
+                        ),
 
                     "name":
                         student.get(
@@ -1003,48 +2057,89 @@ def attendance_page():
                             ""
                         ),
 
-                    "date":
-                        date,
+                    "attendance_date":
+                        attendance_date,
 
-                    "time":
-                        time,
+                    "attendance_time":
+                        attendance_time,
 
                     "status":
-                        status
+                        status,
                 }
 
-                if (
-                    not attendance.empty
-                    and
-                    existing_mask.any()
-                ):
+                try:
 
-                    for key, value in record.items():
-
-                        attendance.loc[
-                            existing_mask,
-                            key
-                        ] = value
-
-                else:
-
-                    attendance = pd.concat(
-                        [
-                            attendance,
-                            pd.DataFrame(
-                                [record]
-                            )
-                        ],
-                        ignore_index=True
+                    existing = (
+                        db.table(
+                            "attendance"
+                        )
+                        .select("id")
+                        .eq(
+                            "school_id",
+                            st.session_state.school_id
+                        )
+                        .eq(
+                            "student_id",
+                            record[
+                                "student_id"
+                            ]
+                        )
+                        .eq(
+                            "attendance_date",
+                            attendance_date
+                        )
+                        .execute()
                     )
 
-                save_attendance(
-                    attendance
-                )
+                    if existing.data:
 
-                st.success(
-                    f"{record['name']} marked {status}."
-                )
+                        db.table(
+                            "attendance"
+                        ).update(
+                            {
+                                "name":
+                                    record["name"],
+
+                                "class_name":
+                                    record[
+                                        "class_name"
+                                    ],
+
+                                "attendance_time":
+                                    attendance_time,
+
+                                "status":
+                                    status,
+                            }
+                        ).eq(
+                            "id",
+                            existing.data[0][
+                                "id"
+                            ]
+                        ).execute()
+
+                    else:
+
+                        db.table(
+                            "attendance"
+                        ).insert(
+                            record
+                        ).execute()
+
+                    st.success(
+                        f"{record['name']} marked "
+                        f"{status}."
+                    )
+
+                except Exception as error:
+
+                    st.error(
+                        "Could not save attendance."
+                    )
+
+                    st.code(
+                        str(error)
+                    )
 
     # --------------------------------------------------------
     # HISTORY
@@ -1052,7 +2147,9 @@ def attendance_page():
 
     with history_tab:
 
-        attendance = load_attendance()
+        attendance = (
+            load_attendance()
+        )
 
         if attendance.empty:
 
@@ -1062,10 +2159,24 @@ def attendance_page():
 
         else:
 
+            columns = [
+                column
+                for column in [
+                    "student_id",
+                    "name",
+                    "class_name",
+                    "attendance_date",
+                    "attendance_time",
+                    "status",
+                ]
+                if column
+                in attendance.columns
+            ]
+
             st.dataframe(
-                attendance.iloc[::-1],
+                attendance[columns],
                 use_container_width=True,
-                hide_index=True
+                hide_index=True,
             )
 
 
@@ -1073,10 +2184,14 @@ def attendance_page():
 # SMART OCCUPANCY
 # ============================================================
 
-def smart_occupancy_page():
+def occupancy_page():
 
     st.title(
         "👥 Smart Occupancy"
+    )
+
+    st.write(
+        "AI-powered classroom person detection."
     )
 
     try:
@@ -1097,198 +2212,6 @@ def smart_occupancy_page():
 
 
 # ============================================================
-# TEACHERS
-# ============================================================
-
-def teacher_management():
-
-    st.title(
-        "👨‍🏫 Teacher Accounts"
-    )
-
-    users = load_users()
-
-    teachers = users.setdefault(
-        "teachers",
-        {}
-    )
-
-    with st.expander(
-        "➕ Add Teacher"
-    ):
-
-        teacher_id = st.text_input(
-            "Teacher ID"
-        )
-
-        teacher_name = st.text_input(
-            "Teacher Name"
-        )
-
-        teacher_password = st.text_input(
-            "Temporary Password",
-            type="password"
-        )
-
-        if st.button(
-            "Create Teacher Account"
-        ):
-
-            teacher_id = teacher_id.strip()
-            teacher_name = teacher_name.strip()
-
-            if not teacher_id:
-
-                st.error(
-                    "Enter Teacher ID."
-                )
-
-            elif not teacher_name:
-
-                st.error(
-                    "Enter Teacher Name."
-                )
-
-            elif len(
-                teacher_password
-            ) < 4:
-
-                st.error(
-                    "Password must have at least 4 characters."
-                )
-
-            elif teacher_id in teachers:
-
-                st.error(
-                    "Teacher ID already exists."
-                )
-
-            else:
-
-                teachers[
-                    teacher_id
-                ] = {
-                    "name":
-                        teacher_name,
-
-                    "password_hash":
-                        password_hash(
-                            teacher_password
-                        ),
-
-                    "enabled":
-                        True
-                }
-
-                save_users(
-                    users
-                )
-
-                st.success(
-                    "Teacher account created."
-                )
-
-                st.rerun()
-
-    if not teachers:
-
-        st.info(
-            "No teacher accounts yet."
-        )
-
-        return
-
-    rows = []
-
-    for teacher_id, info in teachers.items():
-
-        rows.append(
-            {
-                "Teacher ID":
-                    teacher_id,
-
-                "Name":
-                    info.get(
-                        "name",
-                        ""
-                    ),
-
-                "Status":
-                    (
-                        "Enabled"
-                        if info.get(
-                            "enabled",
-                            True
-                        )
-                        else
-                        "Disabled"
-                    )
-            }
-        )
-
-    st.dataframe(
-        pd.DataFrame(
-            rows
-        ),
-        use_container_width=True,
-        hide_index=True
-    )
-
-    st.subheader(
-        "Manage Account"
-    )
-
-    selected_teacher = st.selectbox(
-        "Teacher",
-        list(
-            teachers.keys()
-        ),
-        key="manage_teacher"
-    )
-
-    c1, c2 = st.columns(2)
-
-    with c1:
-
-        if st.button(
-            "Enable / Disable"
-        ):
-
-            teachers[
-                selected_teacher
-            ][
-                "enabled"
-            ] = not teachers[
-                selected_teacher
-            ].get(
-                "enabled",
-                True
-            )
-
-            save_users(
-                users
-            )
-
-            st.rerun()
-
-    with c2:
-
-        if st.button(
-            "🗑 Delete Teacher"
-        ):
-
-            del teachers[
-                selected_teacher
-            ]
-
-            save_users(
-                users
-            )
-
-            st.rerun()
-
-
-# ============================================================
 # REPORTS
 # ============================================================
 
@@ -1301,19 +2224,18 @@ def reports_page():
     students = load_students()
     attendance = load_attendance()
 
-    c1, c2, c3 = st.columns(3)
-
-    c1.metric(
-        "Students",
-        len(students)
+    total_records = len(
+        attendance
     )
 
-    c2.metric(
-        "Attendance Records",
-        len(attendance)
-    )
+    present = 0
 
-    if not attendance.empty:
+    if (
+        not attendance.empty
+        and
+        "status"
+        in attendance.columns
+    ):
 
         present = len(
             attendance[
@@ -1323,11 +2245,13 @@ def reports_page():
             ]
         )
 
+    if total_records:
+
         percentage = round(
             (
                 present
                 /
-                len(attendance)
+                total_records
             )
             *
             100,
@@ -1338,8 +2262,20 @@ def reports_page():
 
         percentage = 0
 
+    c1, c2, c3 = st.columns(3)
+
+    c1.metric(
+        "Students",
+        len(students)
+    )
+
+    c2.metric(
+        "Attendance Records",
+        total_records
+    )
+
     c3.metric(
-        "Overall Present %",
+        "Present %",
         f"{percentage}%"
     )
 
@@ -1348,45 +2284,31 @@ def reports_page():
     if attendance.empty:
 
         st.info(
-            "No attendance data yet."
+            "No attendance records yet."
         )
 
     else:
 
-        classes = sorted(
-            [
-                value
-                for value
-                in attendance[
-                    "class_name"
-                ].unique()
-                if value
+        display_columns = [
+            column
+            for column in [
+                "student_id",
+                "name",
+                "class_name",
+                "attendance_date",
+                "attendance_time",
+                "status",
             ]
-        )
-
-        class_filter = st.selectbox(
-            "Class Filter",
-            [
-                "All Classes"
-            ]
-            +
-            classes
-        )
-
-        report = attendance.copy()
-
-        if class_filter != "All Classes":
-
-            report = report[
-                report["class_name"]
-                ==
-                class_filter
-            ]
+            if column
+            in attendance.columns
+        ]
 
         st.dataframe(
-            report.iloc[::-1],
+            attendance[
+                display_columns
+            ],
             use_container_width=True,
-            hide_index=True
+            hide_index=True,
         )
 
 
@@ -1401,119 +2323,45 @@ def settings_page():
     )
 
     st.subheader(
-        "🔐 Change My Password"
+        "Account"
     )
 
-    new_password = st.text_input(
-        "New Password",
-        type="password"
+    st.write(
+        "School:",
+        st.session_state.school_name
     )
 
-    confirm_password = st.text_input(
-        "Confirm Password",
-        type="password"
+    st.write(
+        "School ID:",
+        st.session_state.school_id
     )
 
-    if st.button(
-        "Update My Password"
-    ):
+    st.write(
+        "Role:",
+        st.session_state.role
+    )
 
-        if len(
-            new_password
-        ) < 4:
-
-            st.error(
-                "Password must have at least 4 characters."
-            )
-
-        elif new_password != confirm_password:
-
-            st.error(
-                "Passwords do not match."
-            )
-
-        else:
-
-            users = load_users()
-
-            if st.session_state.role == "Admin":
-
-                users[
-                    "admin"
-                ][
-                    "password_hash"
-                ] = password_hash(
-                    new_password
-                )
-
-            else:
-
-                teacher_id = (
-                    st.session_state.user_id
-                )
-
-                if (
-                    teacher_id
-                    in users.get(
-                        "teachers",
-                        {}
-                    )
-                ):
-
-                    users[
-                        "teachers"
-                    ][
-                        teacher_id
-                    ][
-                        "password_hash"
-                    ] = password_hash(
-                        new_password
-                    )
-
-            save_users(
-                users
-            )
-
-            st.success(
-                "✅ Password changed successfully."
-            )
+    st.write(
+        "User:",
+        st.session_state.user_name
+        or
+        st.session_state.user_id
+    )
 
     st.divider()
 
-    st.subheader(
-        "💾 System Information"
-    )
-
-    st.info(
-        "EduVision is running with Smart Attendance "
-        "and AI Smart Occupancy."
-    )
-
-    st.warning(
-        "Prototype note: files stored directly on the "
-        "server may reset after a redeploy. Permanent "
-        "cloud storage can be added later."
+    st.success(
+        "☁️ School accounts, teachers, students "
+        "and attendance are connected to the "
+        "EduVision cloud database."
     )
 
 
 # ============================================================
-# LOGOUT
+# SCHOOL APPLICATION
 # ============================================================
 
-def logout():
-
-    st.session_state.logged_in = False
-    st.session_state.role = None
-    st.session_state.user_id = None
-
-    st.rerun()
-
-
-# ============================================================
-# MAIN APP
-# ============================================================
-
-def app():
+def school_application():
 
     with st.sidebar:
 
@@ -1522,20 +2370,27 @@ def app():
         )
 
         st.caption(
-            f"Logged in as: "
-            f"{st.session_state.role}"
+            st.session_state.school_name
+        )
+
+        st.write(
+            f"👤 {st.session_state.role}"
         )
 
         st.divider()
 
-        if st.session_state.role == "Admin":
+        if (
+            st.session_state.role
+            ==
+            "School Admin"
+        ):
 
             pages = [
                 "🏠 Dashboard",
                 "🎓 Students",
+                "👨‍🏫 Teachers",
                 "📷 Smart Attendance",
                 "👥 Smart Occupancy",
-                "👨‍🏫 Teachers",
                 "📊 Reports",
                 "⚙️ Settings",
             ]
@@ -1561,15 +2416,38 @@ def app():
         if st.button(
             "🚪 Log Out"
         ):
-            logout()
+
+            clear_login()
+
+            st.session_state.screen = (
+                "school_portal"
+            )
+
+            st.rerun()
 
     if page == "🏠 Dashboard":
 
-        dashboard()
+        dashboard_page()
 
     elif page == "🎓 Students":
 
         students_page()
+
+    elif page == "👨‍🏫 Teachers":
+
+        if (
+            st.session_state.role
+            ==
+            "School Admin"
+        ):
+
+            teachers_page()
+
+        else:
+
+            st.error(
+                "School Admin access required."
+            )
 
     elif page == "📷 Smart Attendance":
 
@@ -1577,19 +2455,7 @@ def app():
 
     elif page == "👥 Smart Occupancy":
 
-        smart_occupancy_page()
-
-    elif page == "👨‍🏫 Teachers":
-
-        if st.session_state.role == "Admin":
-
-            teacher_management()
-
-        else:
-
-            st.error(
-                "Admin access required."
-            )
+        occupancy_page()
 
     elif page == "📊 Reports":
 
@@ -1601,13 +2467,54 @@ def app():
 
 
 # ============================================================
-# START EDVISION
+# ROUTER
 # ============================================================
 
-if not st.session_state.logged_in:
+screen = st.session_state.screen
 
-    login_page()
+
+if screen == "home":
+
+    home_page()
+
+
+elif screen == "school_portal":
+
+    school_portal()
+
+
+elif screen == "platform_admin_login":
+
+    platform_admin_login()
+
+
+elif (
+    screen == "platform_admin"
+    and
+    st.session_state.logged_in
+    and
+    st.session_state.role
+    ==
+    "EduVision Admin"
+):
+
+    platform_admin_page()
+
+
+elif screen == "school_login":
+
+    school_login()
+
+
+elif (
+    screen == "school_app"
+    and
+    st.session_state.logged_in
+):
+
+    school_application()
+
 
 else:
 
-    app()
+    go_home()
