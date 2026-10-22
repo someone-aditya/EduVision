@@ -7,3 +7,4 @@ av
 opencv-contrib-python-headless
 ultralytics
 lap>=0.5.12
+supabase
