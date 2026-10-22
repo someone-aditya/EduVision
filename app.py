@@ -1184,7 +1184,7 @@ def attendance_page():
         "to reduce time spent taking attendance manually."
     )
 
-    camera_tab, manual_tab, history_tab = st.tabs(
+        camera_tab, manual_tab, history_tab = st.tabs(
         [
             "📷 Camera",
             "✋ Attendance",
@@ -1196,21 +1196,20 @@ def attendance_page():
     # CAMERA
     # --------------------------------------------------------
 
-   with camera_tab:
+    with camera_tab:
 
-    try:
-        from smart_attendance import render_page
+        try:
+            from smart_attendance import render_page
 
-        render_page()
+            render_page()
 
-    except Exception as error:
+        except Exception as error:
 
-        st.error(
-            "AI Attendance could not start."
-        )
+            st.error(
+                "AI Attendance could not start."
+            )
 
-        st.code(str(error))
-
+            st.code(str(error))
     # --------------------------------------------------------
     # ATTENDANCE
     # --------------------------------------------------------
