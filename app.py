@@ -41,49 +41,308 @@ EDUVISION_ADMIN_PASSWORD = os.getenv(
 
 
 # ============================================================
-# DESIGN
+# DESIGN — MAGIC UI INSPIRED
 # ============================================================
 
 st.markdown(
     """
     <style>
+    :root {
+        --ev-bg: #020617;
+        --ev-panel: rgba(10, 18, 38, .78);
+        --ev-panel-2: rgba(15, 23, 42, .92);
+        --ev-border: rgba(148, 163, 184, .16);
+        --ev-purple: #8b5cf6;
+        --ev-blue: #3b82f6;
+        --ev-cyan: #22d3ee;
+        --ev-text: #f8fafc;
+        --ev-muted: #94a3b8;
+    }
+
+    html { scroll-behavior: smooth; }
 
     .stApp {
+        color: var(--ev-text);
         background:
-            radial-gradient(
-                circle at 10% 10%,
-                rgba(124,58,237,.18),
-                transparent 28%
-            ),
-            radial-gradient(
-                circle at 90% 75%,
-                rgba(6,182,212,.13),
-                transparent 30%
-            ),
-            linear-gradient(
-                135deg,
-                #020617,
-                #071426,
-                #020617
-            );
+            radial-gradient(circle at 12% 12%, rgba(124,58,237,.20), transparent 28%),
+            radial-gradient(circle at 88% 72%, rgba(6,182,212,.14), transparent 30%),
+            linear-gradient(135deg, #020617, #071426 52%, #020617);
+        background-attachment: fixed;
+    }
 
-        color: white;
+    /* Animated grid */
+    .stApp::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 0;
+        opacity: .20;
+        background-image:
+            linear-gradient(rgba(148,163,184,.10) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(148,163,184,.10) 1px, transparent 1px);
+        background-size: 52px 52px;
+        mask-image: linear-gradient(to bottom, black, transparent 88%);
+        animation: evGrid 18s linear infinite;
+    }
+
+    @keyframes evGrid {
+        from { background-position: 0 0, 0 0; }
+        to { background-position: 52px 52px, 52px 52px; }
+    }
+
+    /* Aurora blobs */
+    .stApp::after {
+        content: "";
+        position: fixed;
+        width: 45vw;
+        height: 45vw;
+        left: 28vw;
+        top: -28vw;
+        border-radius: 50%;
+        pointer-events: none;
+        filter: blur(80px);
+        opacity: .16;
+        background: linear-gradient(90deg, #7c3aed, #2563eb, #06b6d4);
+        animation: evAurora 10s ease-in-out infinite alternate;
+    }
+
+    @keyframes evAurora {
+        from { transform: translateX(-7%) scale(.92); }
+        to { transform: translateX(7%) scale(1.08); }
+    }
+
+    /* Scroll progress */
+    .ev-scroll-progress {
+        position: fixed;
+        left: 0;
+        top: 0;
+        height: 3px;
+        width: 100%;
+        z-index: 999999;
+        transform-origin: left;
+        background: linear-gradient(90deg, #2563eb, #8b5cf6, #22d3ee);
+        animation: evProgress linear;
+        animation-timeline: scroll(root);
+    }
+
+    @keyframes evProgress {
+        from { transform: scaleX(0); }
+        to { transform: scaleX(1); }
     }
 
     .block-container {
+        position: relative;
+        z-index: 1;
         max-width: 1400px;
-        padding-top: 1.5rem;
+        padding-top: 1.7rem;
         padding-bottom: 4rem;
     }
 
-    h1, h2, h3 {
-        color: #f8fafc !important;
+    h1, h2, h3 { color: #f8fafc !important; }
+
+    p, .stMarkdown { color: #cbd5e1; }
+
+    /* Hero / Aurora text */
+    .ev-hero {
+        position: relative;
+        overflow: hidden;
+        padding: 56px 34px;
+        margin: 4px 0 26px;
+        text-align: center;
+        border-radius: 28px;
+        border: 1px solid rgba(139,92,246,.25);
+        background: linear-gradient(145deg, rgba(15,23,42,.78), rgba(2,6,23,.72));
+        box-shadow: 0 30px 80px rgba(0,0,0,.28);
+        backdrop-filter: blur(18px);
     }
 
-    p {
+    .ev-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(34,211,238,.25);
+        background: rgba(8,145,178,.08);
+        color: #a5f3fc;
+        font-size: .82rem;
+        font-weight: 800;
+        letter-spacing: .08em;
+    }
+
+    .ev-title {
+        margin: 16px 0 8px;
+        font-size: clamp(3rem, 8vw, 6.2rem);
+        line-height: .98;
+        font-weight: 950;
+        letter-spacing: -.06em;
+        background: linear-gradient(90deg, #ffffff 5%, #93c5fd 30%, #c4b5fd 55%, #67e8f9 80%, #ffffff);
+        background-size: 220% auto;
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        animation: evAuroraText 6s linear infinite;
+    }
+
+    @keyframes evAuroraText {
+        to { background-position: 220% center; }
+    }
+
+    .ev-subtitle {
+        max-width: 760px;
+        margin: 0 auto;
         color: #cbd5e1;
+        font-size: clamp(1rem, 2vw, 1.22rem);
+        line-height: 1.7;
     }
 
+    .ev-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        margin-top: 18px;
+        padding: 8px 13px;
+        border-radius: 999px;
+        background: rgba(16,185,129,.08);
+        border: 1px solid rgba(52,211,153,.22);
+        color: #a7f3d0;
+        font-weight: 800;
+        font-size: .84rem;
+    }
+
+    .ev-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #34d399;
+        box-shadow: 0 0 0 0 rgba(52,211,153,.6);
+        animation: evPulse 1.8s infinite;
+    }
+
+    @keyframes evPulse {
+        0% { box-shadow: 0 0 0 0 rgba(52,211,153,.55); }
+        70% { box-shadow: 0 0 0 10px rgba(52,211,153,0); }
+        100% { box-shadow: 0 0 0 0 rgba(52,211,153,0); }
+    }
+
+    /* Magic cards */
+    .ev-card, [data-testid="stMetric"] {
+        position: relative;
+        overflow: hidden;
+        padding: 20px;
+        border-radius: 22px;
+        border: 1px solid var(--ev-border);
+        background:
+            radial-gradient(circle at 15% 0%, rgba(139,92,246,.11), transparent 35%),
+            rgba(15,23,42,.76);
+        box-shadow: 0 16px 45px rgba(0,0,0,.20);
+        backdrop-filter: blur(16px);
+        transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease;
+    }
+
+    .ev-card:hover, [data-testid="stMetric"]:hover {
+        transform: translateY(-4px);
+        border-color: rgba(96,165,250,.42);
+        box-shadow: 0 22px 55px rgba(30,64,175,.15);
+    }
+
+    .ev-card h3 { margin-top: 8px; margin-bottom: 8px; }
+    .ev-card p { margin-bottom: 0; color: #94a3b8; }
+
+    .ev-icon {
+        width: 44px;
+        height: 44px;
+        display: grid;
+        place-items: center;
+        border-radius: 14px;
+        font-size: 1.35rem;
+        background: linear-gradient(135deg, rgba(37,99,235,.22), rgba(139,92,246,.22));
+        border: 1px solid rgba(147,197,253,.16);
+    }
+
+    /* Border beam */
+    .ev-beam {
+        position: relative;
+        overflow: hidden;
+        border-radius: 24px;
+        padding: 1px;
+        background: rgba(148,163,184,.14);
+    }
+
+    .ev-beam::before {
+        content: "";
+        position: absolute;
+        width: 180px;
+        height: 180px;
+        top: -70px;
+        left: -70px;
+        background: conic-gradient(from 90deg, transparent, #60a5fa, #a78bfa, #22d3ee, transparent);
+        animation: evBeam 4.5s linear infinite;
+        filter: blur(3px);
+    }
+
+    @keyframes evBeam {
+        to { transform: rotate(360deg); }
+    }
+
+    .ev-beam-inner {
+        position: relative;
+        z-index: 1;
+        border-radius: 23px;
+        padding: 22px;
+        background: rgba(2,6,23,.94);
+    }
+
+    .ev-section-title {
+        margin-top: 12px;
+        margin-bottom: 4px;
+        font-size: 1.35rem;
+        font-weight: 900;
+        color: #f8fafc;
+    }
+
+    .ev-muted {
+        color: #94a3b8;
+        font-size: .92rem;
+    }
+
+    /* Shimmer Streamlit buttons */
+    div.stButton > button {
+        width: 100%;
+        min-height: 46px;
+        position: relative;
+        overflow: hidden;
+        color: white !important;
+        font-weight: 850;
+        border-radius: 14px;
+        border: 1px solid rgba(96,165,250,.34);
+        background: linear-gradient(100deg, #1d4ed8, #6d28d9 52%, #0891b2);
+        box-shadow: 0 10px 28px rgba(37,99,235,.16);
+        transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+    }
+
+    div.stButton > button::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        transform: translateX(-130%);
+        background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,.28), transparent 65%);
+        animation: evShimmer 3.4s infinite;
+    }
+
+    @keyframes evShimmer {
+        0%, 55% { transform: translateX(-130%); }
+        100% { transform: translateX(130%); }
+    }
+
+    div.stButton > button:hover {
+        transform: translateY(-2px);
+        border-color: rgba(255,255,255,.62);
+        box-shadow: 0 14px 34px rgba(79,70,229,.26);
+    }
+
+    /* Inputs */
     div[data-baseweb="input"] {
         background: white !important;
         border-radius: 12px !important;
@@ -106,80 +365,123 @@ st.markdown(
         border-radius: 12px !important;
     }
 
-    div[data-baseweb="select"] span {
-        color: black !important;
-    }
+    div[data-baseweb="select"] span { color: black !important; }
 
     li[role="option"] {
         color: black !important;
         background: white !important;
     }
 
-    div.stButton > button {
-        width: 100%;
-        min-height: 45px;
-
-        color: white !important;
-        font-weight: 800;
-
-        border-radius: 14px;
-
-        border:
-            1px solid
-            rgba(34,211,238,.35);
-
-        background:
-            linear-gradient(
-                90deg,
-                #2563eb,
-                #7c3aed,
-                #0891b2
-            );
-    }
-
-    div.stButton > button:hover {
-        border:
-            1px solid
-            rgba(255,255,255,.65);
-    }
-
+    /* Metrics / number ticker feel */
     [data-testid="stMetric"] {
-        padding: 18px;
-        border-radius: 18px;
-
-        background:
-            rgba(15,23,42,.82);
-
-        border:
-            1px solid
-            rgba(139,92,246,.22);
+        min-height: 130px;
     }
 
     [data-testid="stMetricValue"] {
         color: white;
+        font-weight: 950;
+        letter-spacing: -.04em;
+        animation: evMetricIn .7s cubic-bezier(.2,.8,.2,1);
     }
 
+    @keyframes evMetricIn {
+        from { opacity: 0; transform: translateY(10px) scale(.96); filter: blur(4px); }
+        to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+    }
+
+    /* Tabs */
+    button[data-baseweb="tab"] {
+        border-radius: 12px 12px 0 0;
+        font-weight: 800;
+    }
+
+    /* Sidebar */
     [data-testid="stSidebar"] {
         background:
-            rgba(2,6,23,.98);
+            radial-gradient(circle at 20% 0%, rgba(124,58,237,.16), transparent 25%),
+            rgba(2,6,23,.97);
+        border-right: 1px solid rgba(148,163,184,.10);
     }
 
-    [data-testid="stSidebar"] * {
-        color: white;
+    [data-testid="stSidebar"] * { color: white; }
+
+    [data-testid="stSidebar"] [role="radiogroup"] label {
+        padding: 8px 10px;
+        border-radius: 12px;
+        transition: background .2s ease, transform .2s ease;
     }
 
-    label {
-        color: white !important;
+    [data-testid="stSidebar"] [role="radiogroup"] label:hover {
+        background: rgba(99,102,241,.10);
+        transform: translateX(3px);
     }
 
-    footer {
-        visibility: hidden;
+    label { color: white !important; }
+
+    /* Tables */
+    [data-testid="stDataFrame"] {
+        border: 1px solid rgba(148,163,184,.14);
+        border-radius: 18px;
+        overflow: hidden;
     }
 
+    /* Hide Streamlit chrome */
+    #MainMenu { visibility: hidden; }
+    footer { visibility: hidden; }
+
+    @media (max-width: 700px) {
+        .ev-hero { padding: 38px 18px; border-radius: 22px; }
+        .ev-title { font-size: 3.25rem; }
+    }
     </style>
+
+    <div class="ev-scroll-progress"></div>
     """,
     unsafe_allow_html=True,
 )
+
+
+def hero(title="EduVision", subtitle="Smarter classrooms. Less administration. More teaching.", badge="AI • SMART CLASSROOM"):
+    st.markdown(
+        f"""
+        <div class="ev-hero">
+            <div class="ev-kicker">✦ {badge}</div>
+            <div class="ev-title">{title}</div>
+            <div class="ev-subtitle">{subtitle}</div>
+            <div class="ev-status"><span class="ev-dot"></span> AI Systems Online • Cloud Connected</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def magic_card(icon, title, text):
+    st.markdown(
+        f"""
+        <div class="ev-card">
+            <div class="ev-icon">{icon}</div>
+            <h3>{title}</h3>
+            <p>{text}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def beam_card(icon, title, text, status="AI READY"):
+    st.markdown(
+        f"""
+        <div class="ev-beam">
+            <div class="ev-beam-inner">
+                <div class="ev-icon">{icon}</div>
+                <div class="ev-section-title">{title}</div>
+                <div class="ev-muted">{text}</div>
+                <div class="ev-status"><span class="ev-dot"></span> {status}</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 # ============================================================
@@ -447,75 +749,70 @@ def load_attendance():
 
 def home_page():
 
-    st.title(
-        "🎓 EduVision"
-    )
-
-    st.subheader(
+    hero(
+        "EduVision",
+        "Smarter classrooms. Less administration. More teaching.",
         "AI • SMART CLASSROOM"
     )
 
-    st.write(
-        "Smarter classrooms through automated "
-        "attendance, classroom monitoring and "
-        "simple school management."
+    st.markdown(
+        """
+        <div style="text-align:center; max-width:760px; margin:-8px auto 28px; color:#94a3b8;">
+            Attendance, classroom occupancy and school management in one intelligent platform.
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
-    st.success(
-        "🟢 EduVision Online"
-    )
-
-    st.divider()
-
-    st.subheader(
-        "Welcome to EduVision"
-    )
-
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns([1.25, 1])
 
     with col1:
 
-        st.subheader(
-            "🏫 School"
+        magic_card(
+            "🏫",
+            "School Portal",
+            "Register a school or securely open an approved EduVision workspace."
         )
 
-        st.write(
-            "Register a school or open an "
-            "approved school."
-        )
+        st.write("")
 
         if st.button(
-            "🏫 School Portal",
+            "🏫 Open School Portal  →",
             use_container_width=True
         ):
-
-            st.session_state.screen = (
-                "school_portal"
-            )
-
+            st.session_state.screen = "school_portal"
             st.rerun()
 
     with col2:
 
-        st.subheader(
-            "👑 EduVision Admin"
+        magic_card(
+            "👑",
+            "EduVision Admin",
+            "Review registration requests and control which schools can access the platform."
         )
 
-        st.write(
-            "Review and approve school "
-            "registration requests."
-        )
+        st.write("")
 
         if st.button(
-            "👑 Admin Portal",
+            "👑 Admin Portal  →",
             use_container_width=True
         ):
-
-            st.session_state.screen = (
-                "platform_admin_login"
-            )
-
+            st.session_state.screen = "platform_admin_login"
             st.rerun()
+
+    st.write("")
+    st.write("")
+
+    a, b, c = st.columns(3)
+
+    with a:
+        magic_card("📷", "Smart Attendance", "AI-assisted attendance with teacher review and attendance history.")
+
+    with b:
+        magic_card("👥", "Smart Occupancy", "Live classroom person detection powered by computer vision.")
+
+    with c:
+        magic_card("☁️", "Cloud Connected", "School, teacher, student and attendance records stay connected to Supabase.")
 
 
 # ============================================================
@@ -1370,83 +1667,74 @@ def dashboard_page():
     students = load_students()
     attendance = load_attendance()
 
-    today = datetime.now().strftime(
-        "%Y-%m-%d"
-    )
-
+    today = datetime.now().strftime("%Y-%m-%d")
     present_today = 0
+    late_today = 0
 
-    if not attendance.empty:
+    if not attendance.empty and "attendance_date" in attendance.columns:
 
-        if "attendance_date" in attendance.columns:
+        today_rows = attendance[
+            attendance["attendance_date"].astype(str) == today
+        ]
 
-            today_rows = attendance[
-                attendance[
-                    "attendance_date"
-                ].astype(str)
-                ==
-                today
-            ]
+        if "status" in today_rows.columns:
+            present_today = len(today_rows[today_rows["status"] == "Present"])
+            late_today = len(today_rows[today_rows["status"] == "Late"])
 
-            if "status" in today_rows.columns:
-
-                present_today = len(
-                    today_rows[
-                        today_rows["status"]
-                        ==
-                        "Present"
-                    ]
-                )
-
-    st.title(
-        f"🏫 {st.session_state.school_name}"
-    )
-
-    st.subheader(
-        "EduVision Smart Classroom"
-    )
-
-    st.success(
-        "🟢 System Online"
+    hero(
+        st.session_state.school_name or "EduVision",
+        "Your intelligent classroom command center.",
+        "SCHOOL DASHBOARD"
     )
 
     c1, c2, c3, c4 = st.columns(4)
 
-    c1.metric(
-        "🎓 Students",
-        len(students)
-    )
+    c1.metric("🎓 Students", len(students))
+    c2.metric("✅ Present Today", present_today)
+    c3.metric("📋 Attendance Records", len(attendance))
+    c4.metric("👤 Access", st.session_state.role)
 
-    c2.metric(
-        "✅ Present Today",
-        present_today
-    )
+    st.write("")
+    st.markdown('<div class="ev-section-title">AI Tools</div>', unsafe_allow_html=True)
+    st.markdown('<div class="ev-muted">Launch the two core EduVision classroom systems from the sidebar.</div>', unsafe_allow_html=True)
+    st.write("")
 
-    c3.metric(
-        "📋 Attendance Records",
-        len(attendance)
-    )
+    left, right = st.columns(2)
 
-    c4.metric(
-        "👤 Account",
-        st.session_state.role
-    )
+    with left:
+        beam_card(
+            "📷",
+            "Smart Attendance",
+            "Recognize registered students and reduce repetitive attendance work.",
+            "FACE AI READY"
+        )
 
-    st.divider()
+    with right:
+        beam_card(
+            "👥",
+            "Smart Occupancy",
+            "Detect people in the classroom and monitor room usage in real time.",
+            "VISION AI READY"
+        )
 
-    st.subheader(
-        "Welcome"
-    )
+    st.write("")
+    st.write("")
 
-    st.write(
-        f"Signed in as "
-        f"{st.session_state.user_name or st.session_state.user_id}."
-    )
+    x, y = st.columns([1.35, 1])
 
-    st.info(
-        "Use the sidebar to open Smart Attendance, "
-        "Smart Occupancy, students and reports."
-    )
+    with x:
+        magic_card(
+            "⚡",
+            "Quick Start",
+            "Open Smart Attendance from the sidebar, start the camera, then review attendance history before class ends."
+        )
+
+    with y:
+        magic_card(
+            "🟢",
+            "System Status",
+            f"Cloud database connected • {present_today} present today • {late_today} late today."
+        )
 
 
 # ============================================================
@@ -1455,9 +1743,7 @@ def dashboard_page():
 
 def students_page():
 
-    st.title(
-        "🎓 Students"
-    )
+    hero("Students", "Manage the students registered to this school.", "🎓 SCHOOL DIRECTORY")
 
     students = load_students()
 
@@ -1665,9 +1951,7 @@ def students_page():
 
 def teachers_page():
 
-    st.title(
-        "👨‍🏫 Teacher Management"
-    )
+    hero("Teacher Management", "Create and manage permanent teacher accounts for this school.", "👨‍🏫 SCHOOL TEAM")
 
     try:
 
@@ -1926,14 +2210,20 @@ def teachers_page():
 
 def attendance_page():
 
-    st.title(
-        "📷 Smart Attendance"
+    hero(
+        "Smart Attendance",
+        "AI-assisted recognition, manual correction and attendance history in one place.",
+        "📷 FACE RECOGNITION"
     )
 
-    st.write(
-        "Use AI face recognition or manually "
-        "record attendance."
+    beam_card(
+        "🤖",
+        "Attendance AI",
+        "Start the camera below. Registered students can be recognized while teachers keep final review control.",
+        "AI CAMERA READY"
     )
+
+    st.write("")
 
     students = load_students()
 
@@ -2186,13 +2476,20 @@ def attendance_page():
 
 def occupancy_page():
 
-    st.title(
-        "👥 Smart Occupancy"
+    hero(
+        "Smart Occupancy",
+        "Live classroom person detection for smarter room monitoring.",
+        "👥 COMPUTER VISION"
     )
 
-    st.write(
-        "AI-powered classroom person detection."
+    beam_card(
+        "👁️",
+        "Live Occupancy AI",
+        "Use the camera feed below to detect people and monitor whether the classroom is occupied.",
+        "YOLO READY"
     )
+
+    st.write("")
 
     try:
 
@@ -2217,9 +2514,7 @@ def occupancy_page():
 
 def reports_page():
 
-    st.title(
-        "📊 Reports"
-    )
+    hero("Reports", "A clear view of student and attendance activity.", "📊 INSIGHTS")
 
     students = load_students()
     attendance = load_attendance()
@@ -2318,9 +2613,7 @@ def reports_page():
 
 def settings_page():
 
-    st.title(
-        "⚙️ Settings"
-    )
+    hero("Settings", "School workspace and cloud connection information.", "⚙️ WORKSPACE")
 
     st.subheader(
         "Account"
