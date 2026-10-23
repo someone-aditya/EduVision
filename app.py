@@ -57,20 +57,75 @@ EDUVISION_ADMIN_PASSWORD = os.getenv(
     "12126"
 )
 
+# Support Streamlit secrets as fallback for admin credentials
+try:
+    if not os.getenv("EDUVISION_ADMIN_ID") and hasattr(st, "secrets") and "EDUVISION_ADMIN_ID" in st.secrets:
+        EDUVISION_ADMIN_ID = str(st.secrets["EDUVISION_ADMIN_ID"])
+    if not os.getenv("EDUVISION_ADMIN_PASSWORD") and hasattr(st, "secrets") and "EDUVISION_ADMIN_PASSWORD" in st.secrets:
+        EDUVISION_ADMIN_PASSWORD = str(st.secrets["EDUVISION_ADMIN_PASSWORD"])
+except Exception:
+    pass
+
 
 # ============================================================
-# SUPABASE CLIENT SETUP (ROBUST & RESILIENT)
+# SUPABASE CLIENT SETUP (ROBUST & RESILIENT — FIXES PGRST125)
 # ============================================================
+
+def clean_supabase_url(url: str) -> str:
+    """
+    Sanitizes SUPABASE_URL to prevent PostgREST PGRST125 404 'Invalid path specified in request URL' errors.
+    Strips trailing slashes, accidental /rest/v1 suffixes, quotes, and whitespace that occur when
+    pasting URLs into deployment dashboards like Render.
+    """
+    if not url:
+        return ""
+    u = str(url).strip().strip("'\"")
+    changed = True
+    while changed:
+        changed = False
+        if u.endswith("/"):
+            u = u[:-1]
+            changed = True
+        if u.endswith("/rest/v1"):
+            u = u[:-8]
+            changed = True
+    if u.startswith("https:///"):
+        u = "https://" + u[9:]
+    elif u.startswith("http:///"):
+        u = "http://" + u[8:]
+    return u
+
+
+def clean_supabase_key(key: str) -> str:
+    if not key:
+        return ""
+    return str(key).strip().strip("'\"")
+
 
 @st.cache_resource
 def get_database():
     if create_client is None:
         raise RuntimeError("The 'supabase' library is not installed. Please run: pip install supabase")
-    if not SUPABASE_URL:
+
+    clean_url = clean_supabase_url(SUPABASE_URL)
+    clean_key = clean_supabase_key(SUPABASE_KEY)
+
+    if not clean_url:
         raise RuntimeError("SUPABASE_URL is missing from environment variables.")
-    if not SUPABASE_KEY:
+    if not clean_key:
         raise RuntimeError("SUPABASE_KEY is missing from environment variables.")
-    return create_client(SUPABASE_URL, SUPABASE_KEY)
+
+    client = create_client(clean_url, clean_key)
+
+    # Extra safety: fix any double slash in PostgREST REST URL (e.g., ...co//rest/v1)
+    if hasattr(client, "rest_url") and client.rest_url:
+        raw_rest = str(client.rest_url)
+        clean_rest = raw_rest.replace("://", "___PROTO___").replace("//", "/").replace("___PROTO___", "://")
+        while clean_rest.endswith("/"):
+            clean_rest = clean_rest[:-1]
+        client.rest_url = clean_rest
+
+    return client
 
 
 db = None
@@ -1033,7 +1088,7 @@ def go_welcome():
 # ============================================================
 
 def get_school(school_id):
-    if not db:
+    if not db or not school_id:
         return None
     try:
         response = (
@@ -1044,44 +1099,44 @@ def get_school(school_id):
         )
         if response.data:
             return response.data[0]
-    except Exception:
-        pass
+    except Exception as error:
+        print(f"get_school error for {school_id}: {error}")
     return None
 
 
 def get_school_by_admin(school_id, admin_id):
-    if not db:
+    if not db or not school_id or not admin_id:
         return None
     try:
         response = (
             db.table("schools")
             .select("*")
-            .eq("school_id", school_id)
-            .eq("admin_id", admin_id)
+            .eq("school_id", str(school_id).strip())
+            .eq("admin_id", str(admin_id).strip())
             .execute()
         )
         if response.data:
             return response.data[0]
-    except Exception:
-        pass
+    except Exception as error:
+        print(f"get_school_by_admin error: {error}")
     return None
 
 
 def get_teacher(school_id, teacher_id):
-    if not db:
+    if not db or not school_id or not teacher_id:
         return None
     try:
         response = (
             db.table("teachers")
             .select("*")
-            .eq("school_id", school_id)
-            .eq("teacher_id", teacher_id)
+            .eq("school_id", str(school_id).strip())
+            .eq("teacher_id", str(teacher_id).strip())
             .execute()
         )
         if response.data:
             return response.data[0]
-    except Exception:
-        pass
+    except Exception as error:
+        print(f"get_teacher error: {error}")
     return None
 
 
@@ -1098,8 +1153,18 @@ def load_students():
         )
         if response.data:
             return pd.DataFrame(response.data)
-    except Exception as error:
-        st.error(f"Could not load students: {error}")
+    except Exception:
+        try:
+            response = (
+                db.table("students")
+                .select("*")
+                .eq("school_id", st.session_state.school_id)
+                .execute()
+            )
+            if response.data:
+                return pd.DataFrame(response.data)
+        except Exception as error:
+            st.error(f"Could not load students: {error}")
     return pd.DataFrame()
 
 
@@ -1116,8 +1181,29 @@ def load_attendance():
         )
         if response.data:
             return pd.DataFrame(response.data)
-    except Exception as error:
-        st.error(f"Could not load attendance: {error}")
+    except Exception:
+        try:
+            response = (
+                db.table("attendance")
+                .select("*")
+                .eq("school_id", st.session_state.school_id)
+                .order("attendance_date", desc=True)
+                .execute()
+            )
+            if response.data:
+                return pd.DataFrame(response.data)
+        except Exception:
+            try:
+                response = (
+                    db.table("attendance")
+                    .select("*")
+                    .eq("school_id", st.session_state.school_id)
+                    .execute()
+                )
+                if response.data:
+                    return pd.DataFrame(response.data)
+            except Exception as error:
+                st.error(f"Could not load attendance: {error}")
     return pd.DataFrame()
 
 
@@ -1579,6 +1665,7 @@ def school_login():
                     st.session_state.user_id = admin_id_clean
                     st.session_state.user_name = f"{school['school_name']} Admin"
                     st.session_state.screen = "school_app"
+                    st.session_state.nav_page = "🏠 Dashboard"
                     st.rerun()
                 else:
                     st.error("Incorrect Admin ID or password.")
@@ -1609,7 +1696,7 @@ def school_login():
                 teacher = get_teacher(school_id, teacher_id_clean)
 
                 if not teacher:
-                    st.error("Teacher account not found.")
+                    st.error("Teacher account not found for this school.")
                 elif not teacher.get("enabled", True):
                     st.error("This teacher account has been disabled by the School Admin.")
                 elif hash_password(password) != teacher.get("password_hash"):
@@ -1618,8 +1705,9 @@ def school_login():
                     st.session_state.logged_in = True
                     st.session_state.role = "Teacher"
                     st.session_state.user_id = teacher_id_clean
-                    st.session_state.user_name = teacher.get("teacher_name", teacher_id_clean)
+                    st.session_state.user_name = teacher.get("teacher_name") or teacher.get("name") or teacher_id_clean
                     st.session_state.screen = "school_app"
+                    st.session_state.nav_page = "🏠 Dashboard"
                     st.rerun()
 
 
@@ -1713,8 +1801,13 @@ def platform_admin_page():
         try:
             response = db.table("schools").select("*").order("created_at", desc=True).execute()
             schools = response.data or []
-        except Exception as error:
-            st.error(f"Error loading schools: {error}")
+        except Exception:
+            try:
+                response = db.table("schools").select("*").execute()
+                schools = response.data or []
+            except Exception as error:
+                st.error(f"Error loading schools from Supabase: {error}")
+                schools = []
 
     pending = [s for s in schools if s.get("approval_status") == "pending"]
     approved = [s for s in schools if s.get("approval_status") == "approved"]
@@ -1770,17 +1863,30 @@ def platform_admin_page():
                 with c_app:
                     if st.button(f"✅ Approve {school_name}", key=f"app_{school_id}", use_container_width=True):
                         try:
-                            db.table("schools").update({
+                            update_payload = {
                                 "approval_status": "approved",
-                                "approved_at": datetime.now(timezone.utc).isoformat(),
                                 "approved_by": st.session_state.user_id,
-                            }).eq("school_id", school_id).execute()
+                            }
+                            try:
+                                update_payload["approved_at"] = datetime.now(timezone.utc).isoformat()
+                            except Exception:
+                                pass
 
+                            db.table("schools").update(update_payload).eq("school_id", school_id).execute()
                             render_confetti()
                             st.success(f"{school_name} successfully approved!")
                             st.rerun()
-                        except Exception as error:
-                            st.error(f"Approval error: {error}")
+                        except Exception:
+                            # Fallback if approved_at column is not present in schema
+                            try:
+                                db.table("schools").update({
+                                    "approval_status": "approved"
+                                }).eq("school_id", school_id).execute()
+                                render_confetti()
+                                st.success(f"{school_name} successfully approved!")
+                                st.rerun()
+                            except Exception as error:
+                                st.error(f"Approval error: {error}")
 
                 with c_rej:
                     if st.button(f"❌ Reject {school_name}", key=f"rej_{school_id}", use_container_width=True):
@@ -1965,6 +2071,7 @@ def dashboard_page():
         st.write("")
         if st.button("Open Smart Attendance  →", key="dash_goto_attendance", use_container_width=True):
             st.session_state.nav_page = "📷 Smart Attendance"
+            st.session_state["sidebar_nav_radio"] = "📷 Smart Attendance"
             st.rerun()
 
     with card2:
@@ -1986,6 +2093,7 @@ def dashboard_page():
         st.write("")
         if st.button("Open Smart Occupancy  →", key="dash_goto_occupancy", use_container_width=True):
             st.session_state.nav_page = "👥 Smart Occupancy"
+            st.session_state["sidebar_nav_radio"] = "👥 Smart Occupancy"
             st.rerun()
 
 
@@ -2073,15 +2181,28 @@ def students_page():
 # ============================================================
 
 def teachers_page():
+    if st.session_state.role != "School Admin":
+        st.error("School Admin privileges required to access Teacher Management.")
+        return
+
     hero("Teacher Management", "Create, enable, and manage permanent faculty accounts for this campus.", "👨‍🏫 FACULTY DIRECTORY")
 
     teachers = []
-    if db:
+    if db and st.session_state.school_id:
         try:
             response = db.table("teachers").select("*").eq("school_id", st.session_state.school_id).order("teacher_name").execute()
             teachers = response.data or []
-        except Exception as error:
-            st.error(f"Error loading teachers: {error}")
+        except Exception:
+            try:
+                response = db.table("teachers").select("*").eq("school_id", st.session_state.school_id).order("name").execute()
+                teachers = response.data or []
+            except Exception:
+                try:
+                    response = db.table("teachers").select("*").eq("school_id", st.session_state.school_id).execute()
+                    teachers = response.data or []
+                except Exception as error:
+                    st.error(f"Error loading teachers: {error}")
+                    teachers = []
 
     active_teachers = [t for t in teachers if t.get("enabled", True)]
 
@@ -2128,8 +2249,21 @@ def teachers_page():
                     render_confetti()
                     st.success(f"Teacher account for {t_name} created permanently.")
                     st.rerun()
-                except Exception as error:
-                    st.error(f"Could not create teacher: {error}")
+                except Exception:
+                    try:
+                        db.table("teachers").insert({
+                            "school_id": st.session_state.school_id,
+                            "teacher_id": t_id,
+                            "name": t_name,
+                            "password_hash": hash_password(t_pwd),
+                            "enabled": True,
+                        }).execute()
+
+                        render_confetti()
+                        st.success(f"Teacher account for {t_name} created permanently.")
+                        st.rerun()
+                    except Exception as error:
+                        st.error(f"Could not create teacher: {error}")
 
     st.write("")
     if not teachers:
@@ -2139,9 +2273,10 @@ def teachers_page():
     # Teachers Table
     rows = []
     for t in teachers:
+        name_val = t.get("teacher_name") or t.get("name") or t.get("teacher_id", "")
         rows.append({
             "Teacher ID": t.get("teacher_id", ""),
-            "Name": t.get("teacher_name", ""),
+            "Name": name_val,
             "Status": "Enabled" if t.get("enabled", True) else "Disabled",
         })
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
@@ -2149,7 +2284,12 @@ def teachers_page():
     # Manage Teacher (Enable/Disable / Delete)
     st.divider()
     st.markdown("### ⚙️ Manage Teacher Account")
-    t_options = {f"{t.get('teacher_id')} — {t.get('teacher_name')}": t for t in teachers}
+    t_options = {}
+    for t in teachers:
+        tid = t.get("teacher_id", "")
+        tname = t.get("teacher_name") or t.get("name") or tid
+        t_options[f"{tid} — {tname}"] = t
+
     selected_t_label = st.selectbox("Select Teacher", list(t_options.keys()), key="manage_t_select")
     target_t = t_options[selected_t_label]
 
@@ -2470,7 +2610,7 @@ def school_application():
 
         st.divider()
 
-        # Navigation Options based on Role
+        # Navigation Options strictly adhering to Role Hierarchy
         if st.session_state.role == "School Admin":
             pages = [
                 "🏠 Dashboard",
@@ -2488,7 +2628,6 @@ def school_application():
                 "📷 Smart Attendance",
                 "👥 Smart Occupancy",
                 "📊 Reports",
-                "⚙️ Settings",
             ]
 
         # Sync navigation with session state
@@ -2515,7 +2654,7 @@ def school_application():
             st.session_state.screen = "school_portal"
             st.rerun()
 
-    # Dispatch to current selected subpage
+    # Dispatch to current selected subpage with role protection
     if page == "🏠 Dashboard":
         dashboard_page()
     elif page == "🎓 Students":
@@ -2532,12 +2671,23 @@ def school_application():
     elif page == "📊 Reports":
         reports_page()
     elif page == "⚙️ Settings":
-        settings_page()
+        if st.session_state.role == "School Admin":
+            settings_page()
+        else:
+            st.error("School Admin privileges required to view settings.")
 
 
 # ============================================================
 # MASTER APPLICATION ROUTER
 # ============================================================
+
+# Guarantee brand-new sessions always start at the Welcome screen.
+# Without this sentinel, Render/Streamlit can serve a cached script
+# run where DEFAULT_SESSION has already been applied but the screen
+# value gets overwritten before the router reads it.
+if "ev_initialized" not in st.session_state:
+    st.session_state["ev_initialized"] = True
+    st.session_state.screen = "welcome"
 
 current_screen = st.session_state.screen
 
