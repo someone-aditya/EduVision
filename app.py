@@ -2,6 +2,7 @@ import os
 import sys
 import hashlib
 import secrets
+import textwrap
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -1213,7 +1214,7 @@ def load_attendance():
 
 def welcome_screen():
     st.markdown(
-        """
+        textwrap.dedent("""
         <div class="ev-welcome-hero">
             <!-- Light Rays -->
             <div class="ev-light-rays"></div>
@@ -1258,7 +1259,7 @@ def welcome_screen():
                 </div>
             </div>
         </div>
-        """,
+        """),
         unsafe_allow_html=True,
     )
 
@@ -1275,13 +1276,13 @@ def welcome_screen():
     # Status Pill
     cloud_status_text = "Cloud Connected" if db else "Cloud: Ready for Deployment"
     st.markdown(
-        f"""
+        textwrap.dedent(f"""
         <div style="text-align:center; margin-top:22px;">
             <div style="display:inline-flex; align-items:center; gap:8px; padding:7px 16px; border-radius:999px; background:rgba(15,23,42,0.8); border:1px solid rgba(52,211,153,0.25); color:#a7f3d0; font-size:0.82rem; font-weight:800;">
                 <span class="ev-pulse-dot"></span> AI Systems Online &bull; {cloud_status_text}
             </div>
         </div>
-        """,
+        """),
         unsafe_allow_html=True,
     )
 
