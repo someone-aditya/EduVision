@@ -190,9 +190,11 @@ st.markdown(
         height: 3.5px;
         width: 100%;
         z-index: 999999;
-        transform-origin: left;
+        transform: scaleX(0);
+        transform-origin: left center;
         background: linear-gradient(90deg, #2563eb 0%, #8b5cf6 50%, #22d3ee 100%);
         box-shadow: 0 0 10px rgba(34, 211, 238, 0.5);
+        will-change: transform;
     }
 
     /* ------------------------------------------------------------
@@ -879,6 +881,25 @@ st.markdown(
     header[data-testid="stHeader"] { background: transparent; }
 
     /* ------------------------------------------------------------
+       PERFORMANCE OPTIMIZATIONS
+       Keep the visual design while reducing browser paint work.
+    ------------------------------------------------------------ */
+    .ev-magic-card, .ev-metric-card, .ev-neon-card-blue, .ev-neon-card-purple,
+    .ev-border-beam-box, [data-testid="stDataFrame"] {
+        content-visibility: auto;
+        contain-intrinsic-size: 1px 260px;
+    }
+
+    @media (max-width: 900px) {
+        .ev-light-rays { filter: blur(32px); }
+        .ev-welcome-hero, .ev-magic-card, .ev-neon-card-blue, .ev-neon-card-purple,
+        .ev-metric-card, [data-testid="stMetric"], [data-testid="stExpander"] {
+            backdrop-filter: none !important;
+        }
+        .ev-meteor-3, .ev-meteor-4, .ev-node-3 { display: none; }
+    }
+
+    /* ------------------------------------------------------------
        ACCESSIBILITY (REDUCED MOTION)
     ------------------------------------------------------------ */
     @media (prefers-reduced-motion: reduce) {
@@ -890,7 +911,34 @@ st.markdown(
     }
     </style>
 
-    <div class="ev-scroll-progress"></div>
+    <div id="ev-scroll-bar" class="ev-scroll-progress"></div>
+    <script>
+    (function() {
+        function updateScrollBar() {
+            var bar = document.getElementById('ev-scroll-bar');
+            if (!bar) return;
+            var scrollTop = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+            var docHeight = Math.max(
+                document.body.scrollHeight, document.documentElement.scrollHeight,
+                document.body.offsetHeight, document.documentElement.offsetHeight,
+                document.body.clientHeight, document.documentElement.clientHeight
+            ) - window.innerHeight;
+            var pct = docHeight > 0 ? Math.min(100, (scrollTop / docHeight) * 100) : 0;
+            bar.style.transform = 'scaleX(' + (pct / 100) + ')';
+        }
+        var evScrollTicking = false;
+        window.addEventListener('scroll', function() {
+            if (!evScrollTicking) {
+                window.requestAnimationFrame(function() {
+                    updateScrollBar();
+                    evScrollTicking = false;
+                });
+                evScrollTicking = true;
+            }
+        }, { passive: true });
+        updateScrollBar();
+    })();
+    </script>
     <div class="ev-flicker-grid"></div>
     """,
     unsafe_allow_html=True,
@@ -1054,6 +1102,8 @@ DEFAULT_SESSION = {
     "nav_page": "🏠 Dashboard",
     "transition_trigger": False,
     "school_reg_success": None,
+    "attendance_ai_loaded": False,
+    "occupancy_ai_loaded": False,
 }
 
 for key, value in DEFAULT_SESSION.items():
@@ -1069,6 +1119,8 @@ def clear_login():
     st.session_state.user_id = None
     st.session_state.user_name = None
     st.session_state.nav_page = "🏠 Dashboard"
+    st.session_state.attendance_ai_loaded = False
+    st.session_state.occupancy_ai_loaded = False
 
 
 def go_portal():
@@ -1205,6 +1257,23 @@ def load_attendance():
             except Exception as error:
                 st.error(f"Could not load attendance: {error}")
     return pd.DataFrame()
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def load_approved_schools():
+    """Small public directory cache; avoids a Supabase round-trip on every widget rerun."""
+    if not db:
+        return []
+    try:
+        response = (
+            db.table("schools")
+            .select("school_id, school_name")
+            .eq("approval_status", "approved")
+            .execute()
+        )
+        return response.data or []
+    except Exception:
+        return []
 
 
 # ============================================================
@@ -1529,14 +1598,9 @@ def school_portal():
             unsafe_allow_html=True,
         )
 
-        # Load approved schools from Supabase for the name-based selector
-        approved_schools = []  # list of dicts: {school_name, school_id}
-        if db:
-            try:
-                resp = db.table("schools").select("school_id, school_name").eq("approval_status", "approved").execute()
-                approved_schools = resp.data if resp.data else []
-            except Exception as _e:
-                st.error(f"Could not load school list: {_e}")
+        # Cache the public approved-school directory briefly so normal widget
+        # reruns do not hit Supabase every time. Internal school_id usage is unchanged.
+        approved_schools = load_approved_schools()
 
         if not approved_schools:
             st.info("No approved schools are currently available.")
@@ -2345,12 +2409,19 @@ def attendance_page():
             unsafe_allow_html=True,
         )
 
-        try:
-            from smart_attendance import render_page as render_smart_attendance
-            render_smart_attendance()
-        except Exception as error:
-            st.error("Smart Attendance engine could not be initialized.")
-            st.code(str(error))
+        # Import OpenCV/WebRTC only after the user explicitly starts the AI camera.
+        # This keeps Dashboard, login, reports, and even the Attendance page lightweight.
+        if st.session_state.get("attendance_ai_loaded", False):
+            try:
+                from smart_attendance import render_page as render_smart_attendance
+                render_smart_attendance()
+            except Exception as error:
+                st.session_state.attendance_ai_loaded = False
+                st.error("Smart Attendance engine could not be initialized.")
+                st.code(str(error))
+        elif st.button("📷 Load AI Camera", key="load_attendance_ai", use_container_width=True):
+            st.session_state.attendance_ai_loaded = True
+            st.rerun()
 
     # ------------------------------------------------------------
     # TAB 2: MANUAL ATTENDANCE
@@ -2454,12 +2525,19 @@ def occupancy_page():
         unsafe_allow_html=True,
     )
 
-    try:
-        from smart_occupancy import render_page as render_smart_occupancy
-        render_smart_occupancy()
-    except Exception as error:
-        st.error("Smart Occupancy engine could not be initialized.")
-        st.code(str(error))
+    # Ultralytics/YOLO is one of the heaviest dependencies. Import it only when
+    # the user asks to start occupancy vision, never during ordinary navigation.
+    if st.session_state.get("occupancy_ai_loaded", False):
+        try:
+            from smart_occupancy import render_page as render_smart_occupancy
+            render_smart_occupancy()
+        except Exception as error:
+            st.session_state.occupancy_ai_loaded = False
+            st.error("Smart Occupancy engine could not be initialized.")
+            st.code(str(error))
+    elif st.button("👥 Load AI Occupancy Camera", key="load_occupancy_ai", use_container_width=True):
+        st.session_state.occupancy_ai_loaded = True
+        st.rerun()
 
 
 # ============================================================
