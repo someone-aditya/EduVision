@@ -1522,41 +1522,48 @@ def school_portal():
     # ------------------------------------------------------------
     with open_tab:
         st.markdown(
-            """
-            <div class="ev-magic-card" style="margin-bottom:20px;">
-                <div style="font-size:1.2rem; font-weight:850; color:#f8fafc; margin-bottom:6px;">Access Approved School</div>
-                <p style="color:#94a3b8; font-size:0.92rem; margin:0;">
-                    Enter your assigned School ID (e.g., SCH-XXXXXX) to access your school's authentication screen.
-                </p>
-            </div>
-            """,
+            '<div class="ev-magic-card" style="margin-bottom:20px;">'
+            '<div style="font-size:1.2rem; font-weight:850; color:#f8fafc; margin-bottom:6px;">Access Approved School</div>'
+            '<p style="color:#94a3b8; font-size:0.92rem; margin:0;">Search or select your school by name to access its authentication screen.</p>'
+            '</div>',
             unsafe_allow_html=True,
         )
 
-        col_open1, col_open2 = st.columns([2, 1])
-        with col_open1:
-            school_id_input = st.text_input("School ID", placeholder="SCH-XXXXXX", key="open_school_id_field")
+        # Load approved schools from Supabase for the name-based selector
+        approved_schools = []  # list of dicts: {school_name, school_id}
+        if db:
+            try:
+                resp = db.table("schools").select("school_id, school_name").eq("approval_status", "approved").execute()
+                approved_schools = resp.data if resp.data else []
+            except Exception as _e:
+                st.error(f"Could not load school list: {_e}")
 
-        st.write("")
-        if st.button("🏫 Open School Workspace  →", key="open_school_action_btn", use_container_width=True):
-            school_id_clean = school_id_input.strip().upper()
+        if not approved_schools:
+            st.info("No approved schools are currently available.")
+        else:
+            # Build name→id mapping (names displayed to user; id used internally)
+            school_name_to_id = {s["school_name"]: s["school_id"] for s in approved_schools}
+            school_names = sorted(school_name_to_id.keys())
 
-            if not school_id_clean:
-                st.error("Please enter a School ID.")
-            elif not db:
-                st.error("Database connection unavailable. Please check Supabase configuration.")
-            else:
-                school = get_school(school_id_clean)
-                if not school:
-                    st.error("School ID not found. Please double-check or submit a registration.")
+            selected_name = st.selectbox(
+                "School",
+                options=school_names,
+                index=0,
+                placeholder="Search or select your school...",
+                key="open_school_name_select",
+            )
+
+            st.write("")
+            if st.button("🏫 Open School Workspace  →", key="open_school_action_btn", use_container_width=True):
+                selected_id = school_name_to_id.get(selected_name, "").strip()
+                if not selected_id:
+                    st.error("Please select a school.")
+                elif not db:
+                    st.error("Database connection unavailable. Please check Supabase configuration.")
                 else:
-                    status = school.get("approval_status", "pending")
-                    if status == "pending":
-                        st.warning("⏳ This school registration is currently pending EduVision Admin approval.")
-                    elif status == "rejected":
-                        st.error("❌ This school registration request was rejected by an administrator.")
-                    elif status != "approved":
-                        st.warning("This school workspace is not active yet.")
+                    school = get_school(selected_id)
+                    if not school:
+                        st.error("School record not found. Please contact EduVision Admin.")
                     else:
                         st.session_state.school_id = school["school_id"]
                         st.session_state.school_name = school["school_name"]
