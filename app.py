@@ -188,13 +188,12 @@ st.markdown(
         top: 0;
         left: 0;
         height: 3.5px;
-        width: 100%;
+        width: 0%;
         z-index: 999999;
-        transform: scaleX(0);
-        transform-origin: left center;
+        transform-origin: left;
         background: linear-gradient(90deg, #2563eb 0%, #8b5cf6 50%, #22d3ee 100%);
         box-shadow: 0 0 10px rgba(34, 211, 238, 0.5);
-        will-change: transform;
+        transition: width 0.1s linear;
     }
 
     /* ------------------------------------------------------------
@@ -881,25 +880,6 @@ st.markdown(
     header[data-testid="stHeader"] { background: transparent; }
 
     /* ------------------------------------------------------------
-       PERFORMANCE OPTIMIZATIONS
-       Keep the visual design while reducing browser paint work.
-    ------------------------------------------------------------ */
-    .ev-magic-card, .ev-metric-card, .ev-neon-card-blue, .ev-neon-card-purple,
-    .ev-border-beam-box, [data-testid="stDataFrame"] {
-        content-visibility: auto;
-        contain-intrinsic-size: 1px 260px;
-    }
-
-    @media (max-width: 900px) {
-        .ev-light-rays { filter: blur(32px); }
-        .ev-welcome-hero, .ev-magic-card, .ev-neon-card-blue, .ev-neon-card-purple,
-        .ev-metric-card, [data-testid="stMetric"], [data-testid="stExpander"] {
-            backdrop-filter: none !important;
-        }
-        .ev-meteor-3, .ev-meteor-4, .ev-node-3 { display: none; }
-    }
-
-    /* ------------------------------------------------------------
        ACCESSIBILITY (REDUCED MOTION)
     ------------------------------------------------------------ */
     @media (prefers-reduced-motion: reduce) {
@@ -924,18 +904,9 @@ st.markdown(
                 document.body.clientHeight, document.documentElement.clientHeight
             ) - window.innerHeight;
             var pct = docHeight > 0 ? Math.min(100, (scrollTop / docHeight) * 100) : 0;
-            bar.style.transform = 'scaleX(' + (pct / 100) + ')';
+            bar.style.width = pct + '%';
         }
-        var evScrollTicking = false;
-        window.addEventListener('scroll', function() {
-            if (!evScrollTicking) {
-                window.requestAnimationFrame(function() {
-                    updateScrollBar();
-                    evScrollTicking = false;
-                });
-                evScrollTicking = true;
-            }
-        }, { passive: true });
+        window.addEventListener('scroll', updateScrollBar, { passive: true });
         updateScrollBar();
     })();
     </script>
@@ -1102,8 +1073,6 @@ DEFAULT_SESSION = {
     "nav_page": "🏠 Dashboard",
     "transition_trigger": False,
     "school_reg_success": None,
-    "attendance_ai_loaded": False,
-    "occupancy_ai_loaded": False,
 }
 
 for key, value in DEFAULT_SESSION.items():
@@ -1119,8 +1088,6 @@ def clear_login():
     st.session_state.user_id = None
     st.session_state.user_name = None
     st.session_state.nav_page = "🏠 Dashboard"
-    st.session_state.attendance_ai_loaded = False
-    st.session_state.occupancy_ai_loaded = False
 
 
 def go_portal():
@@ -1257,23 +1224,6 @@ def load_attendance():
             except Exception as error:
                 st.error(f"Could not load attendance: {error}")
     return pd.DataFrame()
-
-
-@st.cache_data(ttl=60, show_spinner=False)
-def load_approved_schools():
-    """Small public directory cache; avoids a Supabase round-trip on every widget rerun."""
-    if not db:
-        return []
-    try:
-        response = (
-            db.table("schools")
-            .select("school_id, school_name")
-            .eq("approval_status", "approved")
-            .execute()
-        )
-        return response.data or []
-    except Exception:
-        return []
 
 
 # ============================================================
@@ -1598,9 +1548,14 @@ def school_portal():
             unsafe_allow_html=True,
         )
 
-        # Cache the public approved-school directory briefly so normal widget
-        # reruns do not hit Supabase every time. Internal school_id usage is unchanged.
-        approved_schools = load_approved_schools()
+        # Load approved schools from Supabase for the name-based selector
+        approved_schools = []  # list of dicts: {school_name, school_id}
+        if db:
+            try:
+                resp = db.table("schools").select("school_id, school_name").eq("approval_status", "approved").execute()
+                approved_schools = resp.data if resp.data else []
+            except Exception as _e:
+                st.error(f"Could not load school list: {_e}")
 
         if not approved_schools:
             st.info("No approved schools are currently available.")
@@ -2151,36 +2106,68 @@ def dashboard_page():
 # ============================================================
 
 def students_page():
-    hero("Students Directory", "Manage registered students, classes, and roster records for this school.", "🎓 CAMPUS ROSTER")
+    is_admin = st.session_state.role == "School Admin"
+    is_teacher = st.session_state.role == "Teacher"
+
+    if is_admin:
+        hero(
+            "Student Approvals",
+            "Review teacher-submitted student registrations and manage the approved school roster.",
+            "🎓 STUDENT MANAGEMENT",
+        )
+    else:
+        hero(
+            "Students Directory",
+            "View your school roster and register new students for School Admin approval.",
+            "🎓 CAMPUS ROSTER",
+        )
 
     students = load_students()
 
-    col_count, col_dummy = st.columns([1, 2])
-    with col_count:
-        render_metric_card("🎓", "Enrolled Students", len(students), "Active profiles in database")
+    # Normalize status values so old records using "Active" continue to work.
+    if students.empty or "status" not in students.columns:
+        pending_students = pd.DataFrame()
+        active_students = students.copy()
+        declined_students = pd.DataFrame()
+    else:
+        normalized_status = students["status"].fillna("Active").astype(str).str.strip().str.lower()
+        pending_students = students[normalized_status == "pending"].copy()
+        declined_students = students[normalized_status == "declined"].copy()
+        active_students = students[~normalized_status.isin(["pending", "declined"])].copy()
+
+    m1, m2 = st.columns(2)
+    with m1:
+        render_metric_card("🎓", "Active Students", len(active_students), "Approved school roster")
+    with m2:
+        render_metric_card("⏳", "Pending Approval", len(pending_students), "Awaiting School Admin review")
 
     st.write("")
 
-    # Add Student (School Admin Only)
-    if st.session_state.role == "School Admin":
-        with st.expander("➕ Add New Student Profile"):
+    # Teachers submit student registrations. They are never activated directly.
+    if is_teacher:
+        with st.expander("➕ Register New Student", expanded=False):
+            st.caption("The student will be sent to the School Admin for approval before becoming active.")
             c1, c2 = st.columns(2)
             with c1:
-                student_id = st.text_input("Student ID (e.g., ST001)", key="add_student_id")
-                student_name = st.text_input("Full Name", key="add_student_name")
+                student_id = st.text_input("Student ID (e.g., ST001)", key="teacher_reg_student_id")
+                student_name = st.text_input("Full Name", key="teacher_reg_student_name")
             with c2:
-                class_name = st.text_input("Class / Grade", key="add_student_class")
-                roll_no = st.text_input("Roll Number", key="add_student_roll")
+                class_name = st.text_input("Class / Grade", key="teacher_reg_student_class")
+                roll_no = st.text_input("Roll Number", key="teacher_reg_student_roll")
 
             st.write("")
-            if st.button("✨ Add Student to Roster", key="submit_add_student_btn"):
+            if st.button("📨 Submit Student for Approval", key="teacher_submit_student_btn", use_container_width=True):
                 student_id = student_id.strip()
                 student_name = student_name.strip()
+                class_name = class_name.strip()
+                roll_no = roll_no.strip()
 
                 if not student_id:
                     st.error("Please enter a Student ID.")
                 elif not student_name:
                     st.error("Please enter the student's name.")
+                elif not class_name:
+                    st.error("Please enter the student's class / grade.")
                 elif not db:
                     st.error("Database connection unavailable.")
                 else:
@@ -2189,37 +2176,106 @@ def students_page():
                             "school_id": st.session_state.school_id,
                             "student_id": student_id,
                             "name": student_name,
-                            "class_name": class_name.strip(),
-                            "roll_no": roll_no.strip(),
-                            "status": "Active",
+                            "class_name": class_name,
+                            "roll_no": roll_no,
+                            "status": "Pending",
                         }).execute()
-
                         render_confetti()
-                        st.success(f"Student {student_name} ({student_id}) successfully enrolled.")
+                        st.success(f"{student_name} was submitted to the School Admin for approval.")
                         st.rerun()
                     except Exception as error:
-                        st.error(f"Could not add student: {error}")
+                        error_text = str(error).lower()
+                        if "duplicate" in error_text or "unique" in error_text or "23505" in error_text:
+                            st.error("That Student ID is already registered for this school.")
+                        else:
+                            st.error(f"Could not submit student registration: {error}")
 
-    # Students Table
-    st.write("")
-    if students.empty:
-        st.info("No students enrolled yet. Add students using the form above.")
+    # School Admin reviews teacher submissions.
+    if is_admin:
+        st.markdown("### ⏳ Pending Student Registrations")
+        if pending_students.empty:
+            st.info("No student registrations are waiting for approval.")
+        else:
+            visible_cols = [c for c in ["student_id", "name", "class_name", "roll_no", "status"] if c in pending_students.columns]
+            st.dataframe(pending_students[visible_cols], use_container_width=True, hide_index=True)
+
+            pending_map = {
+                f"{row.get('student_id')} — {row.get('name')} — {row.get('class_name', '')}": row.get("student_id")
+                for _, row in pending_students.iterrows()
+            }
+            selected_pending = st.selectbox(
+                "Select a pending student",
+                list(pending_map.keys()),
+                key="pending_student_review_select",
+            )
+            selected_pending_id = pending_map[selected_pending]
+
+            approve_col, decline_col = st.columns(2)
+            with approve_col:
+                if st.button("✅ Approve Student", key="approve_student_btn", use_container_width=True):
+                    try:
+                        db.table("students").update({"status": "Active"}).eq(
+                            "school_id", st.session_state.school_id
+                        ).eq("student_id", selected_pending_id).execute()
+                        render_confetti()
+                        st.success("Student approved and added to the active roster.")
+                        st.rerun()
+                    except Exception as error:
+                        st.error(f"Could not approve student: {error}")
+
+            with decline_col:
+                if st.button("❌ Decline Student", key="decline_student_btn", use_container_width=True):
+                    try:
+                        db.table("students").update({"status": "Declined"}).eq(
+                            "school_id", st.session_state.school_id
+                        ).eq("student_id", selected_pending_id).execute()
+                        st.warning("Student registration declined.")
+                        st.rerun()
+                    except Exception as error:
+                        st.error(f"Could not decline student: {error}")
+
+        st.write("")
+
+    # Both roles can view the approved roster.
+    st.markdown("### 🎓 Active Student Roster")
+    if active_students.empty:
+        st.info("No approved students are currently in the school roster.")
     else:
-        visible_cols = [c for c in ["student_id", "name", "class_name", "roll_no", "status"] if c in students.columns]
-        st.dataframe(students[visible_cols], use_container_width=True, hide_index=True)
+        visible_cols = [c for c in ["student_id", "name", "class_name", "roll_no", "status"] if c in active_students.columns]
+        st.dataframe(active_students[visible_cols], use_container_width=True, hide_index=True)
 
-    # Remove Student (School Admin Only)
-    if st.session_state.role == "School Admin" and not students.empty:
+    # Teachers can see their own pending submissions as pending school records.
+    if is_teacher and not pending_students.empty:
+        st.write("")
+        with st.expander(f"⏳ Pending Registrations ({len(pending_students)})"):
+            visible_cols = [c for c in ["student_id", "name", "class_name", "roll_no", "status"] if c in pending_students.columns]
+            st.dataframe(pending_students[visible_cols], use_container_width=True, hide_index=True)
+
+    # School Admin can inspect declined requests and permanently remove records.
+    if is_admin and not declined_students.empty:
+        st.write("")
+        with st.expander(f"❌ Declined Registrations ({len(declined_students)})"):
+            visible_cols = [c for c in ["student_id", "name", "class_name", "roll_no", "status"] if c in declined_students.columns]
+            st.dataframe(declined_students[visible_cols], use_container_width=True, hide_index=True)
+
+    if is_admin and not students.empty:
         st.divider()
-        st.markdown("### 🗑 Remove Student")
-        student_map = {f"{row.get('student_id')} — {row.get('name')}": row.get('student_id') for _, row in students.iterrows()}
-        selected_student_label = st.selectbox("Select Student to Remove", list(student_map.keys()), key="del_student_select")
+        st.markdown("### 🗑 Remove Student Record")
+        student_map = {
+            f"{row.get('student_id')} — {row.get('name')} — {row.get('status', 'Active')}": row.get("student_id")
+            for _, row in students.iterrows()
+        }
+        selected_student_label = st.selectbox(
+            "Select Student Record to Remove",
+            list(student_map.keys()),
+            key="del_student_select",
+        )
 
         if st.button("🗑 Remove Student Record", key="del_student_btn"):
             sid = student_map[selected_student_label]
             try:
                 db.table("students").delete().eq("school_id", st.session_state.school_id).eq("student_id", sid).execute()
-                st.success("Student removed successfully.")
+                st.success("Student record removed successfully.")
                 st.rerun()
             except Exception as error:
                 st.error(f"Could not delete student: {error}")
@@ -2409,19 +2465,12 @@ def attendance_page():
             unsafe_allow_html=True,
         )
 
-        # Import OpenCV/WebRTC only after the user explicitly starts the AI camera.
-        # This keeps Dashboard, login, reports, and even the Attendance page lightweight.
-        if st.session_state.get("attendance_ai_loaded", False):
-            try:
-                from smart_attendance import render_page as render_smart_attendance
-                render_smart_attendance()
-            except Exception as error:
-                st.session_state.attendance_ai_loaded = False
-                st.error("Smart Attendance engine could not be initialized.")
-                st.code(str(error))
-        elif st.button("📷 Load AI Camera", key="load_attendance_ai", use_container_width=True):
-            st.session_state.attendance_ai_loaded = True
-            st.rerun()
+        try:
+            from smart_attendance import render_page as render_smart_attendance
+            render_smart_attendance()
+        except Exception as error:
+            st.error("Smart Attendance engine could not be initialized.")
+            st.code(str(error))
 
     # ------------------------------------------------------------
     # TAB 2: MANUAL ATTENDANCE
@@ -2525,19 +2574,12 @@ def occupancy_page():
         unsafe_allow_html=True,
     )
 
-    # Ultralytics/YOLO is one of the heaviest dependencies. Import it only when
-    # the user asks to start occupancy vision, never during ordinary navigation.
-    if st.session_state.get("occupancy_ai_loaded", False):
-        try:
-            from smart_occupancy import render_page as render_smart_occupancy
-            render_smart_occupancy()
-        except Exception as error:
-            st.session_state.occupancy_ai_loaded = False
-            st.error("Smart Occupancy engine could not be initialized.")
-            st.code(str(error))
-    elif st.button("👥 Load AI Occupancy Camera", key="load_occupancy_ai", use_container_width=True):
-        st.session_state.occupancy_ai_loaded = True
-        st.rerun()
+    try:
+        from smart_occupancy import render_page as render_smart_occupancy
+        render_smart_occupancy()
+    except Exception as error:
+        st.error("Smart Occupancy engine could not be initialized.")
+        st.code(str(error))
 
 
 # ============================================================
