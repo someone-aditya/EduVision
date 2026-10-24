@@ -2,7 +2,6 @@ import os
 import sys
 import hashlib
 import secrets
-import textwrap
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -1213,55 +1212,34 @@ def load_attendance():
 # ============================================================
 
 def welcome_screen():
-    st.markdown(
-        textwrap.dedent("""
-        <div class="ev-welcome-hero">
-            <!-- Light Rays -->
-            <div class="ev-light-rays"></div>
-
-            <!-- Meteors -->
-            <div class="ev-meteor ev-meteor-1"></div>
-            <div class="ev-meteor ev-meteor-2"></div>
-            <div class="ev-meteor ev-meteor-3"></div>
-            <div class="ev-meteor ev-meteor-4"></div>
-
-            <!-- Floating 3D Nodes -->
-            <div class="ev-floating-node ev-node-1"></div>
-            <div class="ev-floating-node ev-node-2"></div>
-            <div class="ev-floating-node ev-node-3"></div>
-
-            <div style="position:relative; z-index:2;">
-                <!-- Animated Shiny Badge -->
-                <div class="ev-shiny-badge">
-                    <span class="ev-shiny-text">✦ AI-POWERED EDUCATION</span>
-                </div>
-
-                <div style="color:#94a3b8; font-weight:800; font-size:1.1rem; letter-spacing:0.04em; margin-top:20px;">
-                    Welcome to
-                </div>
-
-                <!-- Aurora Gradient Title -->
-                <h1 class="ev-aurora-title">EDUVISION</h1>
-
-                <!-- Kinetic Subtitle -->
-                <div class="ev-kinetic-sub">
-                    The Future of <span class="ev-kinetic-word">Smart Classrooms</span>
-                </div>
-
-                <p class="ev-welcome-tagline">
-                    Smarter classrooms. Less administration. More teaching.
-                </p>
-
-                <div style="margin: 0 auto 30px;">
-                    <span class="ev-badge-chip">SMARTER</span>
-                    <span class="ev-badge-chip">FASTER</span>
-                    <span class="ev-badge-chip">INTELLIGENT</span>
-                </div>
-            </div>
-        </div>
-        """),
-        unsafe_allow_html=True,
+    _welcome_html = (
+'<div class="ev-welcome-hero">'
+'\n<!-- Light Rays -->'
+'\n<div class="ev-light-rays"></div>'
+'\n<!-- Meteors -->'
+'\n<div class="ev-meteor ev-meteor-1"></div>'
+'\n<div class="ev-meteor ev-meteor-2"></div>'
+'\n<div class="ev-meteor ev-meteor-3"></div>'
+'\n<div class="ev-meteor ev-meteor-4"></div>'
+'\n<!-- Floating 3D Nodes -->'
+'\n<div class="ev-floating-node ev-node-1"></div>'
+'\n<div class="ev-floating-node ev-node-2"></div>'
+'\n<div class="ev-floating-node ev-node-3"></div>'
+'\n<div style="position:relative; z-index:2;">'
+'\n<div class="ev-shiny-badge"><span class="ev-shiny-text">✦ AI-POWERED EDUCATION</span></div>'
+'\n<div style="color:#94a3b8; font-weight:800; font-size:1.1rem; letter-spacing:0.04em; margin-top:20px;">Welcome to</div>'
+'\n<h1 class="ev-aurora-title">EDUVISION</h1>'
+'\n<div class="ev-kinetic-sub">The Future of <span class="ev-kinetic-word">Smart Classrooms</span></div>'
+'\n<p class="ev-welcome-tagline">Smarter classrooms. Less administration. More teaching.</p>'
+'\n<div style="margin: 0 auto 30px;">'
+'\n<span class="ev-badge-chip">SMARTER</span>'
+'\n<span class="ev-badge-chip">FASTER</span>'
+'\n<span class="ev-badge-chip">INTELLIGENT</span>'
+'\n</div>'
+'\n</div>'
+'\n</div>'
     )
+    st.markdown(_welcome_html, unsafe_allow_html=True)
 
     # Centered CTA Button with Shimmer & Interactive Hover
     col_l, col_btn, col_r = st.columns([1, 1.25, 1])
@@ -1275,16 +1253,15 @@ def welcome_screen():
 
     # Status Pill
     cloud_status_text = "Cloud Connected" if db else "Cloud: Ready for Deployment"
-    st.markdown(
-        textwrap.dedent(f"""
-        <div style="text-align:center; margin-top:22px;">
-            <div style="display:inline-flex; align-items:center; gap:8px; padding:7px 16px; border-radius:999px; background:rgba(15,23,42,0.8); border:1px solid rgba(52,211,153,0.25); color:#a7f3d0; font-size:0.82rem; font-weight:800;">
-                <span class="ev-pulse-dot"></span> AI Systems Online &bull; {cloud_status_text}
-            </div>
-        </div>
-        """),
-        unsafe_allow_html=True,
+    _pill_html = (
+        '<div style="text-align:center; margin-top:22px;">'
+        '<div style="display:inline-flex; align-items:center; gap:8px; padding:7px 16px;'
+        ' border-radius:999px; background:rgba(15,23,42,0.8);'
+        ' border:1px solid rgba(52,211,153,0.25); color:#a7f3d0; font-size:0.82rem; font-weight:800;">'
+        f'<span class="ev-pulse-dot"></span> AI Systems Online &bull; {cloud_status_text}'
+        '</div></div>'
     )
+    st.markdown(_pill_html, unsafe_allow_html=True)
 
 
 # ============================================================
