@@ -262,60 +262,74 @@ class OccupancyProcessor(
 
 def render_page():
 
-    st.subheader(
-        "🤖 AI Classroom Occupancy"
+    # --------------------------------------------------------
+    # INFORMATION
+    # --------------------------------------------------------
+
+    st.markdown(
+        """
+        <div style="
+            background:#ffffff;
+            border:1px solid #dedede;
+            border-radius:8px;
+            padding:20px;
+            margin-bottom:20px;
+        ">
+            <div style="
+                font-size:1.05rem;
+                font-weight:800;
+                color:#111111;
+                margin-bottom:6px;
+            ">
+                Classroom Monitoring
+            </div>
+
+            <div style="
+                color:#6b7280;
+                font-size:0.9rem;
+                line-height:1.5;
+            ">
+                Use the classroom camera to monitor
+                the number of people currently visible.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
-    st.write(
-        "EduVision uses YOLO AI computer vision "
-        "to detect and count people visible in "
-        "the classroom camera."
-    )
-
-    st.info(
-        "📷 Press START and allow camera access."
-    )
-
-
-    # ----------------------------------------
+    # --------------------------------------------------------
     # MODEL FILE CHECK
-    # ----------------------------------------
+    # --------------------------------------------------------
 
     if not YOLO_MODEL_PATH.exists():
 
         st.error(
-            "yolo11n.pt was not found."
-        )
-
-        st.caption(
-            "Keep yolo11n.pt in the main "
-            "EduVision folder."
+            "Classroom monitoring is currently unavailable."
         )
 
         return
 
-
-    # ----------------------------------------
+    # --------------------------------------------------------
     # MODEL CHECK
-    # ----------------------------------------
+    # --------------------------------------------------------
 
     if model is None:
 
         st.error(
-            "YOLO could not be loaded."
-        )
-
-        st.warning(
-            "Check that ultralytics is "
-            "installed correctly."
+            "Classroom monitoring could not be started."
         )
 
         return
 
-
-    # ----------------------------------------
+    # --------------------------------------------------------
     # CAMERA
-    # ----------------------------------------
+    # --------------------------------------------------------
+
+    st.markdown("### Camera")
+
+    st.caption(
+        "Press START below and allow camera access."
+    )
 
     try:
 
@@ -340,48 +354,86 @@ def render_page():
     except Exception as error:
 
         st.error(
-            "Smart Occupancy camera "
-            "could not start."
+            "Camera could not start."
         )
 
         st.info(
-            "Allow camera permission "
-            "and refresh EduVision."
+            "Check your browser camera permission and try again."
         )
 
         st.code(
             str(error)
         )
 
-
-    # ----------------------------------------
-    # DETAILS
-    # ----------------------------------------
+    # --------------------------------------------------------
+    # INFORMATION
+    # --------------------------------------------------------
 
     st.divider()
 
-    c1, c2, c3 = st.columns(3)
+    st.markdown("### Classroom Status")
 
-    c1.metric(
-        "🤖 AI Model",
-        "YOLO11"
-    )
+    c1, c2 = st.columns(2)
 
-    c2.metric(
-        "👤 Detection",
-        "People"
-    )
+    with c1:
+        st.markdown(
+            """
+            <div style="
+                background:#ffffff;
+                border:1px solid #dedede;
+                border-radius:8px;
+                padding:18px;
+            ">
+                <div style="
+                    color:#6b7280;
+                    font-size:0.8rem;
+                    font-weight:700;
+                    margin-bottom:5px;
+                ">
+                    MONITORING
+                </div>
 
-    c3.metric(
-        "📡 System",
-        "Ready"
-    )
+                <div style="
+                    color:#111111;
+                    font-size:1.15rem;
+                    font-weight:800;
+                ">
+                    People
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-    st.caption(
-        "EduVision • AI-Powered "
-        "Smart Classroom Management"
-    )
+    with c2:
+        st.markdown(
+            """
+            <div style="
+                background:#ffffff;
+                border:1px solid #dedede;
+                border-radius:8px;
+                padding:18px;
+            ">
+                <div style="
+                    color:#6b7280;
+                    font-size:0.8rem;
+                    font-weight:700;
+                    margin-bottom:5px;
+                ">
+                    STATUS
+                </div>
 
+                <div style="
+                    color:#111111;
+                    font-size:1.15rem;
+                    font-weight:800;
+                ">
+                    Ready
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 # ============================================================
 # RUN DIRECTLY FOR TESTING
