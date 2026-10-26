@@ -1310,56 +1310,62 @@ def welcome_screen():
 # ============================================================
 
 def portal_screen():
-    # Trigger smooth light sweep overlay on entrance if transitioning
+    """Clean role-entry portal: only the two actions users actually need."""
     if st.session_state.get("transition_trigger"):
         st.markdown('<div class="ev-light-sweep-overlay"></div>', unsafe_allow_html=True)
         st.session_state.transition_trigger = False
 
     st.markdown('<div class="ev-portal-container">', unsafe_allow_html=True)
 
-    # Top Brand Bar
-    c_brand, c_nav = st.columns([2, 1])
+    c_brand, c_nav = st.columns([3, 1])
     with c_brand:
         st.markdown(
             """
-            <div style="display:flex; align-items:center; gap:12px;">
+            <div style="display:flex; align-items:center; gap:12px; padding:4px 0 10px;">
                 <span style="font-size:1.8rem;">🎓</span>
                 <div>
-                    <div style="font-size:1.4rem; font-weight:950; letter-spacing:-0.03em; color:#f8fafc;">EduVision</div>
-                    <div style="font-size:0.75rem; color:#94a3b8; font-weight:700; text-transform:uppercase; letter-spacing:0.06em;">AI Classroom SaaS</div>
+                    <div style="font-size:1.45rem; font-weight:950; letter-spacing:-0.03em; color:#f8fafc;">EduVision</div>
+                    <div style="font-size:0.75rem; color:#38bdf8; font-weight:850; letter-spacing:0.08em; text-transform:uppercase;">AI Smart Campus</div>
                 </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
     with c_nav:
-        st.markdown('<div style="text-align:right;">', unsafe_allow_html=True)
-        if st.button("✦ Back to Welcome", key="back_to_welcome_btn"):
+        if st.button("← Back to Welcome", key="portal_back_welcome", use_container_width=True):
             go_welcome()
-        st.markdown('</div>', unsafe_allow_html=True)
 
-    # Hero Headline
-    hero(
-        "AI-Powered Smart Classroom Management",
-        "Attendance, classroom intelligence and school management — connected in one unified platform.",
-        "EDUVISION PORTAL"
+    st.markdown(
+        """
+        <div style="position:relative; overflow:hidden; max-width:1100px; margin:18px auto 34px; padding:44px 28px 38px;
+                    text-align:center; border-radius:28px; border:1px solid rgba(99,102,241,0.28);
+                    background:radial-gradient(circle at 50% 0%, rgba(59,130,246,0.13), transparent 42%),
+                               linear-gradient(155deg, rgba(15,23,42,0.88), rgba(2,6,23,0.92));
+                    box-shadow:0 24px 65px rgba(0,0,0,0.32);">
+            <div class="ev-shiny-badge"><span class="ev-shiny-text">✦ EDUVISION PORTAL</span></div>
+            <div style="font-size:clamp(2rem,4.6vw,3.7rem); font-weight:950; letter-spacing:-0.045em; line-height:1.08;
+                        color:#f8fafc; margin:18px 0 10px;">
+                Smarter classrooms.<br><span style="color:#7dd3fc;">Simpler management.</span>
+            </div>
+            <div style="max-width:700px; margin:0 auto; color:#cbd5e1; font-size:clamp(.95rem,1.6vw,1.08rem); line-height:1.65;">
+                Attendance, classroom monitoring and school management in one secure workspace.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
-    # Primary & Secondary Action Cards
-    c_primary, c_secondary = st.columns([1.6, 1])
+    school_col, admin_col = st.columns(2, gap="large")
 
-    with c_primary:
+    with school_col:
         st.markdown(
             """
-            <div class="ev-neon-card-blue">
-                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-                    <div class="ev-shiny-badge"><span class="ev-shiny-text">★ PRIMARY PORTAL</span></div>
-                    <span style="font-size:1.8rem;">🏫</span>
+            <div class="ev-neon-card-blue" style="min-height:210px;">
+                <div style="font-size:2.1rem; margin-bottom:16px;">🏫</div>
+                <div style="font-size:1.5rem; font-weight:950; color:#f8fafc; margin-bottom:9px;">School Portal</div>
+                <div style="color:#cbd5e1; line-height:1.65;">
+                    Register a school or open an approved school workspace for administrators and teachers.
                 </div>
-                <div style="font-size:1.5rem; font-weight:900; color:#f8fafc; margin-bottom:6px;">School Portal</div>
-                <p style="color:#94a3b8; font-size:0.95rem; line-height:1.6; margin-bottom:20px;">
-                    Access your campus command center, register a new institution, or log in as an administrator or teacher.
-                </p>
             </div>
             """,
             unsafe_allow_html=True,
@@ -1369,18 +1375,15 @@ def portal_screen():
             st.session_state.screen = "school_portal"
             st.rerun()
 
-    with c_secondary:
+    with admin_col:
         st.markdown(
             """
-            <div class="ev-magic-card">
-                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-                    <div style="font-size:0.75rem; font-weight:800; color:#cbd5e1; text-transform:uppercase; letter-spacing:0.06em;">ADMINISTRATION</div>
-                    <span style="font-size:1.8rem;">👑</span>
+            <div class="ev-neon-card-purple" style="min-height:210px;">
+                <div style="font-size:2.1rem; margin-bottom:16px;">👑</div>
+                <div style="font-size:1.5rem; font-weight:950; color:#f8fafc; margin-bottom:9px;">EduVision Admin</div>
+                <div style="color:#cbd5e1; line-height:1.65;">
+                    Review school registration requests and approve or decline access to the EduVision platform.
                 </div>
-                <div style="font-size:1.35rem; font-weight:900; color:#f8fafc; margin-bottom:6px;">EduVision Admin</div>
-                <p style="color:#94a3b8; font-size:0.9rem; line-height:1.6; margin-bottom:20px;">
-                    Review campus registration requests, approve new schools, and govern platform permissions.
-                </p>
             </div>
             """,
             unsafe_allow_html=True,
@@ -1390,65 +1393,14 @@ def portal_screen():
             st.session_state.screen = "platform_admin_login"
             st.rerun()
 
-    st.write("")
-    st.write("")
-
-    # ------------------------------------------------------------
-    # BENTO GRID SECTION
-    # ------------------------------------------------------------
     st.markdown(
         """
-        <div style="display:flex; align-items:center; gap:10px; margin:24px 0 16px;">
-            <div class="ev-shiny-badge"><span class="ev-shiny-text">✦ PLATFORM CAPABILITIES</span></div>
-            <div style="font-size:1.25rem; font-weight:900; color:#f8fafc;">Bento Architecture</div>
+        <div style="text-align:center; margin:30px auto 8px; color:#64748b; font-size:0.82rem;">
+            Secure school access • Cloud synchronized
         </div>
         """,
         unsafe_allow_html=True,
     )
-
-    b1, b2 = st.columns([1.2, 1])
-
-    with b1:
-        beam_card(
-            "📷",
-            "Smart Attendance",
-            "AI-assisted face recognition attendance powered by OpenCV LBPH. Recognize registered students, minimize roll-call overhead, and ensure auditable records.",
-            "FACE AI ENGINE"
-        )
-
-    with b2:
-        beam_card(
-            "👥",
-            "Smart Occupancy",
-            "Real-time classroom person detection with YOLO11 computer vision. Monitor headcounts, occupancy limits, and room utilization in live video.",
-            "YOLO11 VISION"
-        )
-
-    st.write("")
-
-    b3, b4, b5 = st.columns(3)
-
-    with b3:
-        magic_card(
-            "☁️",
-            "Cloud Connected",
-            "Institutional data, rosters, credentials, and daily attendance logs stay synchronized in real time with the Supabase cloud database."
-        )
-
-    with b4:
-        magic_card(
-            "🏫",
-            "School Management",
-            "Role-based access separating School Administrators and Teachers. Add students, govern staff accounts, and track classroom performance."
-        )
-
-    with b5:
-        magic_card(
-            "✨",
-            "AI System Tools",
-            "Low-latency WebRTC browser video processing with privacy-conscious client/server pipelines and instant facial recognition inference."
-        )
-
     st.markdown('</div>', unsafe_allow_html=True)
 
 
