@@ -841,46 +841,61 @@ def render_page():
 
     load_student_data()
 
-    labels_ready = (
-        load_labels()
-    )
-
-    model_ready = (
-        load_face_model()
-    )
+    labels_ready = load_labels()
+    model_ready = load_face_model()
 
     ensure_attendance_file()
 
+    # --------------------------------------------------------
+    # CAMERA INFORMATION
+    # --------------------------------------------------------
 
-    st.subheader(
-        "🤖 Automatic Face Recognition"
+    st.markdown(
+        """
+        <div style="
+            background:#ffffff;
+            border:1px solid #dedede;
+            border-radius:8px;
+            padding:20px;
+            margin-bottom:20px;
+        ">
+            <div style="
+                font-size:1.05rem;
+                font-weight:800;
+                color:#111111;
+                margin-bottom:6px;
+            ">
+                Student Recognition
+            </div>
+
+            <div style="
+                color:#6b7280;
+                font-size:0.9rem;
+                line-height:1.5;
+            ">
+                Registered students can look at the camera
+                to have their attendance recorded.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
-    st.write(
-        "Look at the camera. EduVision recognizes "
-        "registered students and automatically marks "
-        "them present."
+    st.caption(
+        "Please review the attendance results after using the camera."
     )
 
-
-    st.warning(
-        "⚠️ Face recognition can make mistakes. "
-        "Teachers should review the attendance results."
-    )
-
-
-    # ========================================================
+    # --------------------------------------------------------
     # STUDENT CHECK
-    # ========================================================
+    # --------------------------------------------------------
 
     if not STUDENTS_PATH.exists():
 
         st.error(
-            "students.csv was not found."
+            "Student data was not found."
         )
 
         return
-
 
     if not students:
 
@@ -890,72 +905,39 @@ def render_page():
 
         return
 
-
-    # ========================================================
-    # LABEL CHECK
-    # ========================================================
+    # --------------------------------------------------------
+    # RECOGNITION DATA CHECK
+    # --------------------------------------------------------
 
     if not labels_ready:
 
         st.error(
-            "Face labels were not found. "
-            "Train student faces first."
+            "Student recognition data is not ready."
         )
 
         return
 
-
-    # ========================================================
+    # --------------------------------------------------------
     # MODEL CHECK
-    # ========================================================
+    # --------------------------------------------------------
 
     if not model_ready:
 
-        if not hasattr(
-            cv2,
-            "face"
-        ):
-
-            st.error(
-                "OpenCV face recognition is unavailable."
-            )
-
-            st.info(
-                "requirements.txt must contain "
-                "opencv-contrib-python-headless."
-            )
-
-        elif not MODEL_PATH.exists():
-
-            st.error(
-                "face_model.yml was not found."
-            )
-
-            st.info(
-                "Train the registered student faces first."
-            )
-
-        else:
-
-            st.error(
-                "Face recognition model could not be loaded."
-            )
+        st.error(
+            "Student recognition is currently unavailable."
+        )
 
         return
 
-
-    # ========================================================
+    # --------------------------------------------------------
     # CAMERA
-    # ========================================================
+    # --------------------------------------------------------
 
-    st.subheader(
-        "🎥 Scan Class"
+    st.markdown("### Camera")
+
+    st.caption(
+        "Press START below and allow camera access."
     )
-
-    st.info(
-        "Press START and allow camera permission."
-    )
-
 
     try:
 
@@ -982,24 +964,20 @@ def render_page():
         )
 
         st.info(
-            "Allow camera permission in your browser "
-            "and refresh EduVision."
+            "Check your browser camera permission and try again."
         )
 
         st.code(
             str(error)
         )
 
-
-    # ========================================================
-    # ATTENDANCE TABLE
-    # ========================================================
+    # --------------------------------------------------------
+    # TODAY'S ATTENDANCE
+    # --------------------------------------------------------
 
     st.divider()
 
-    st.subheader(
-        "📊 Today's Attendance"
-    )
+    st.markdown("### Today's Attendance")
 
     show_today_attendance()
 
