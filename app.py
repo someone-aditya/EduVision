@@ -328,20 +328,25 @@ st.markdown(
        AURORA GRADIENT TEXT
     ------------------------------------------------------------ */
     .ev-aurora-title {
-        font-size: clamp(4.2rem, 10vw, 7.4rem);
-        font-weight: 950;
-        letter-spacing: -0.06em;
-        line-height: 0.98;
-        margin: 12px 0 10px;
-        background: linear-gradient(90deg, #ffffff 0%, #93c5fd 22%, #c4b5fd 50%, #67e8f9 78%, #ffffff 100%);
-        background-size: 260% auto;
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        animation: evAuroraGrad 7s linear infinite;
-        filter: drop-shadow(0 0 12px rgba(255,255,255,0.22)) drop-shadow(0 0 30px rgba(96,165,250,0.48));
-        position: relative;
-        z-index: 5;
-    }
+    font-size: clamp(4.2rem, 10vw, 7.4rem);
+    font-weight: 950;
+    letter-spacing: -0.045em;
+    line-height: 1;
+    margin: 16px 0 14px;
+
+    /* Solid fallback so EDUVISION can NEVER disappear */
+    color: #e0f2fe !important;
+    -webkit-text-fill-color: #e0f2fe !important;
+
+    /* Strong premium glow */
+    text-shadow:
+        0 0 12px rgba(255,255,255,0.35),
+        0 0 28px rgba(59,130,246,0.55),
+        0 0 50px rgba(139,92,246,0.30);
+
+    position: relative;
+    z-index: 5;
+}
 
     @keyframes evAuroraGrad {
         0% { background-position: 0% center; }
