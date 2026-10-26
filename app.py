@@ -328,7 +328,7 @@ st.markdown(
        AURORA GRADIENT TEXT
     ------------------------------------------------------------ */
     .ev-aurora-title {
-        font-size: clamp(3.2rem, 8vw, 6.4rem);
+        font-size: clamp(4.2rem, 10vw, 7.4rem);
         font-weight: 950;
         letter-spacing: -0.06em;
         line-height: 0.98;
@@ -338,12 +338,29 @@ st.markdown(
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         animation: evAuroraGrad 7s linear infinite;
-        filter: drop-shadow(0 0 35px rgba(96, 165, 250, 0.3));
+        filter: drop-shadow(0 0 12px rgba(255,255,255,0.22)) drop-shadow(0 0 30px rgba(96,165,250,0.48));
+        position: relative;
+        z-index: 5;
     }
 
     @keyframes evAuroraGrad {
         0% { background-position: 0% center; }
         100% { background-position: 260% center; }
+    }
+
+    /* Welcome EDUVISION: stronger visibility while keeping Magic UI */
+    .ev-welcome-brand {
+        font-size: clamp(4.4rem, 11vw, 7.8rem);
+        color: #ffffff;
+        -webkit-text-stroke: 1px rgba(255,255,255,0.16);
+        text-shadow: 0 0 18px rgba(59,130,246,0.22);
+    }
+
+    @media (max-width: 700px) {
+        .ev-welcome-brand {
+            font-size: clamp(3.1rem, 16vw, 5rem);
+            letter-spacing: -0.035em;
+        }
     }
 
     /* ------------------------------------------------------------
@@ -1247,7 +1264,7 @@ def welcome_screen():
 '\n<div style="position:relative; z-index:2;">'
 '\n<div class="ev-shiny-badge"><span class="ev-shiny-text">✦ AI-POWERED EDUCATION</span></div>'
 '\n<div style="color:#94a3b8; font-weight:800; font-size:1.1rem; letter-spacing:0.04em; margin-top:20px;">Welcome to</div>'
-'\n<h1 class="ev-aurora-title">EDUVISION</h1>'
+'\n<h1 class="ev-aurora-title ev-welcome-brand">EDUVISION</h1>'
 '\n<div class="ev-kinetic-sub">The Future of <span class="ev-kinetic-word">Smart Classrooms</span></div>'
 '\n<p class="ev-welcome-tagline">Smarter classrooms. Less administration. More teaching.</p>'
 '\n<div style="margin: 0 auto 30px;">'
