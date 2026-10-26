@@ -134,17 +134,24 @@ try:
 except Exception as error:
     db_error_message = str(error)
 
-
 # ============================================================
-# SIMPLE WHITE UI
+# CLEAN VISIBLE UI
 # ============================================================
 
 st.markdown(
     """
 <style>
-html, body, [data-testid="stAppViewContainer"], .stApp {
-    background: #f7f7f5 !important;
-    color: #111111 !important;
+
+/* =========================
+   MAIN PAGE
+========================= */
+
+html,
+body,
+[data-testid="stAppViewContainer"],
+.stApp {
+    background: #f4f6f8 !important;
+    color: #111827 !important;
 }
 
 .block-container {
@@ -153,72 +160,225 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
     padding-bottom: 4rem;
 }
 
-h1, h2, h3 {
-    color: #111111 !important;
+h1, h2, h3, h4 {
+    color: #111827 !important;
+    font-weight: 800 !important;
 }
 
 p {
-    color: #374151;
-}
-
-label {
     color: #374151 !important;
 }
 
+label {
+    color: #111827 !important;
+    font-weight: 650 !important;
+}
+
+
+/* =========================
+   CONTAINERS / BIG BOXES
+========================= */
+
+[data-testid="stVerticalBlockBorderWrapper"] {
+    background: #eaf2f8 !important;
+    border: 1.5px solid #9ca3af !important;
+    border-radius: 10px !important;
+    padding: 6px !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06) !important;
+}
+
+/* Text inside boxes */
+[data-testid="stVerticalBlockBorderWrapper"] h1,
+[data-testid="stVerticalBlockBorderWrapper"] h2,
+[data-testid="stVerticalBlockBorderWrapper"] h3 {
+    color: #111827 !important;
+}
+
+[data-testid="stVerticalBlockBorderWrapper"] p {
+    color: #374151 !important;
+}
+
+
+/* =========================
+   BUTTONS
+========================= */
+
 div.stButton > button {
-    width: 100%;
-    min-height: 42px;
-    background: #111111 !important;
-    color: white !important;
-    border: 1px solid #111111 !important;
-    border-radius: 6px !important;
-    font-weight: 700 !important;
+    width: 100% !important;
+    min-height: 44px !important;
+
+    background: #111827 !important;
+    color: #ffffff !important;
+
+    border: 2px solid #111827 !important;
+    border-radius: 7px !important;
+
+    font-size: 0.95rem !important;
+    font-weight: 800 !important;
+
     box-shadow: none !important;
 }
 
-div.stButton > button:hover {
-    background: #333333 !important;
-    color: white !important;
-    border-color: #333333 !important;
+/* Make ALL button text visible */
+div.stButton > button p,
+div.stButton > button span,
+div.stButton > button div {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+    font-weight: 800 !important;
+    opacity: 1 !important;
 }
 
+div.stButton > button:hover {
+    background: #374151 !important;
+    border-color: #374151 !important;
+    color: #ffffff !important;
+}
+
+div.stButton > button:hover p,
+div.stButton > button:hover span,
+div.stButton > button:hover div {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+}
+
+
+/* =========================
+   INPUT BOXES
+========================= */
+
 div[data-baseweb="input"] {
-    background: white !important;
-    border-radius: 6px !important;
+    background: #ffffff !important;
+    border: 1.5px solid #9ca3af !important;
+    border-radius: 7px !important;
 }
 
 div[data-baseweb="input"] input {
-    background: white !important;
-    color: #111111 !important;
-    -webkit-text-fill-color: #111111 !important;
+    background: #ffffff !important;
+    color: #111827 !important;
+    -webkit-text-fill-color: #111827 !important;
 }
+
+input::placeholder {
+    color: #6b7280 !important;
+    -webkit-text-fill-color: #6b7280 !important;
+    opacity: 1 !important;
+}
+
+
+/* =========================
+   SELECT BOXES
+========================= */
 
 div[data-baseweb="select"] > div {
-    background: white !important;
-    color: #111111 !important;
+    background: #ffffff !important;
+    color: #111827 !important;
+    border: 1.5px solid #9ca3af !important;
+    border-radius: 7px !important;
 }
+
+div[data-baseweb="select"] span {
+    color: #111827 !important;
+}
+
+
+/* =========================
+   METRIC BOXES
+========================= */
 
 [data-testid="stMetric"] {
-    background: white !important;
-    border: 1px solid #dedede !important;
-    border-radius: 8px !important;
-    padding: 16px !important;
+    background: #eaf2f8 !important;
+    border: 1.5px solid #9ca3af !important;
+    border-radius: 10px !important;
+    padding: 18px !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.04) !important;
 }
 
+[data-testid="stMetricLabel"] {
+    color: #4b5563 !important;
+    font-weight: 700 !important;
+}
+
+[data-testid="stMetricValue"] {
+    color: #111827 !important;
+    font-weight: 900 !important;
+}
+
+
+/* =========================
+   EXPANDERS
+========================= */
+
+[data-testid="stExpander"] {
+    background: #ffffff !important;
+    border: 1.5px solid #9ca3af !important;
+    border-radius: 8px !important;
+}
+
+
+/* =========================
+   SIDEBAR
+========================= */
+
 [data-testid="stSidebar"] {
-    background: white !important;
-    border-right: 1px solid #dedede !important;
+    background: #eaf2f8 !important;
+    border-right: 1.5px solid #9ca3af !important;
 }
 
 [data-testid="stSidebar"] * {
-    color: #111111;
+    color: #111827 !important;
 }
 
-[data-testid="stExpander"] {
-    background: white !important;
-    border: 1px solid #dedede !important;
-    border-radius: 8px !important;
+[data-testid="stSidebar"] div.stButton > button {
+    background: #111827 !important;
+    color: #ffffff !important;
 }
+
+[data-testid="stSidebar"] div.stButton > button p {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+}
+
+
+/* =========================
+   TABLES
+========================= */
+
+[data-testid="stDataFrame"] {
+    background: #ffffff !important;
+    border: 1.5px solid #9ca3af !important;
+    border-radius: 8px !important;
+    overflow: hidden !important;
+}
+
+
+/* =========================
+   TABS
+========================= */
+
+button[data-baseweb="tab"] {
+    color: #4b5563 !important;
+    font-weight: 700 !important;
+}
+
+button[data-baseweb="tab"][aria-selected="true"] {
+    color: #111827 !important;
+}
+
+
+/* =========================
+   ALERTS
+========================= */
+
+[data-testid="stAlert"] {
+    border-radius: 8px !important;
+    border: 1px solid #9ca3af !important;
+}
+
+
+/* =========================
+   CLEAN STREAMLIT
+========================= */
 
 #MainMenu {
     visibility: hidden;
@@ -227,11 +387,11 @@ div[data-baseweb="select"] > div {
 footer {
     visibility: hidden;
 }
+
 </style>
 """,
     unsafe_allow_html=True,
 )
-
 
 # ============================================================
 # SECURITY
