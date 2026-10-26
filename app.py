@@ -44,20 +44,11 @@ SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 
 try:
-    if (
-        not SUPABASE_URL
-        and hasattr(st, "secrets")
-        and "SUPABASE_URL" in st.secrets
-    ):
+    if not SUPABASE_URL and "SUPABASE_URL" in st.secrets:
         SUPABASE_URL = str(st.secrets["SUPABASE_URL"])
 
-    if (
-        not SUPABASE_KEY
-        and hasattr(st, "secrets")
-        and "SUPABASE_KEY" in st.secrets
-    ):
+    if not SUPABASE_KEY and "SUPABASE_KEY" in st.secrets:
         SUPABASE_KEY = str(st.secrets["SUPABASE_KEY"])
-
 except Exception:
     pass
 
@@ -75,7 +66,6 @@ EDUVISION_ADMIN_PASSWORD = os.getenv(
 try:
     if (
         not os.getenv("EDUVISION_ADMIN_ID")
-        and hasattr(st, "secrets")
         and "EDUVISION_ADMIN_ID" in st.secrets
     ):
         EDUVISION_ADMIN_ID = str(
@@ -84,13 +74,11 @@ try:
 
     if (
         not os.getenv("EDUVISION_ADMIN_PASSWORD")
-        and hasattr(st, "secrets")
         and "EDUVISION_ADMIN_PASSWORD" in st.secrets
     ):
         EDUVISION_ADMIN_PASSWORD = str(
             st.secrets["EDUVISION_ADMIN_PASSWORD"]
         )
-
 except Exception:
     pass
 
@@ -99,35 +87,19 @@ except Exception:
 # SUPABASE
 # ============================================================
 
-def clean_supabase_url(url: str) -> str:
+def clean_supabase_url(url):
     if not url:
         return ""
 
-    u = str(url).strip().strip("'\"")
+    url = str(url).strip().strip("'\"")
 
-    changed = True
+    if url.endswith("/rest/v1"):
+        url = url[:-8]
 
-    while changed:
-        changed = False
-
-        if u.endswith("/"):
-            u = u[:-1]
-            changed = True
-
-        if u.endswith("/rest/v1"):
-            u = u[:-8]
-            changed = True
-
-    if u.startswith("https:///"):
-        u = "https://" + u[9:]
-
-    elif u.startswith("http:///"):
-        u = "http://" + u[8:]
-
-    return u
+    return url.rstrip("/")
 
 
-def clean_supabase_key(key: str) -> str:
+def clean_supabase_key(key):
     if not key:
         return ""
 
@@ -142,23 +114,16 @@ def get_database():
             "The supabase library is not installed."
         )
 
-    clean_url = clean_supabase_url(SUPABASE_URL)
-    clean_key = clean_supabase_key(SUPABASE_KEY)
+    url = clean_supabase_url(SUPABASE_URL)
+    key = clean_supabase_key(SUPABASE_KEY)
 
-    if not clean_url:
-        raise RuntimeError(
-            "SUPABASE_URL is missing."
-        )
+    if not url:
+        raise RuntimeError("SUPABASE_URL is missing.")
 
-    if not clean_key:
-        raise RuntimeError(
-            "SUPABASE_KEY is missing."
-        )
+    if not key:
+        raise RuntimeError("SUPABASE_KEY is missing.")
 
-    return create_client(
-        clean_url,
-        clean_key
-    )
+    return create_client(url, key)
 
 
 db = None
@@ -166,252 +131,104 @@ db_error_message = None
 
 try:
     db = get_database()
-
 except Exception as error:
     db_error_message = str(error)
 
 
 # ============================================================
-# WHITE MINIMALIST UI
+# SIMPLE WHITE UI
 # ============================================================
 
 st.markdown(
     """
-    <style>
+<style>
+html, body, [data-testid="stAppViewContainer"], .stApp {
+    background: #f7f7f5 !important;
+    color: #111111 !important;
+}
 
-    :root {
-        --bg: #f7f7f5;
-        --card: #ffffff;
-        --text: #111111;
-        --muted: #6b7280;
-        --border: #dedede;
-    }
+.block-container {
+    max-width: 1200px;
+    padding-top: 2rem;
+    padding-bottom: 4rem;
+}
 
-    html,
-    body,
-    [data-testid="stAppViewContainer"],
-    .stApp {
-        background: #f7f7f5 !important;
-        color: #111111 !important;
-        font-family:
-            -apple-system,
-            BlinkMacSystemFont,
-            "Segoe UI",
-            Roboto,
-            sans-serif !important;
-    }
+h1, h2, h3 {
+    color: #111111 !important;
+}
 
-    .block-container {
-        max-width: 1250px;
-        padding-top: 2rem;
-        padding-bottom: 4rem;
-    }
+p {
+    color: #374151;
+}
 
-    h1,
-    h2,
-    h3,
-    h4,
-    h5,
-    h6 {
-        color: #111111 !important;
-    }
+label {
+    color: #374151 !important;
+}
 
-    p {
-        color: #374151;
-    }
+div.stButton > button {
+    width: 100%;
+    min-height: 42px;
+    background: #111111 !important;
+    color: white !important;
+    border: 1px solid #111111 !important;
+    border-radius: 6px !important;
+    font-weight: 700 !important;
+    box-shadow: none !important;
+}
 
-    label {
-        color: #374151 !important;
-        font-weight: 650 !important;
-    }
+div.stButton > button:hover {
+    background: #333333 !important;
+    color: white !important;
+    border-color: #333333 !important;
+}
 
-    div.stButton > button {
-        width: 100%;
-        min-height: 44px;
+div[data-baseweb="input"] {
+    background: white !important;
+    border-radius: 6px !important;
+}
 
-        background: #111111 !important;
-        color: #ffffff !important;
+div[data-baseweb="input"] input {
+    background: white !important;
+    color: #111111 !important;
+    -webkit-text-fill-color: #111111 !important;
+}
 
-        border: 1px solid #111111 !important;
-        border-radius: 6px !important;
+div[data-baseweb="select"] > div {
+    background: white !important;
+    color: #111111 !important;
+}
 
-        font-weight: 700 !important;
+[data-testid="stMetric"] {
+    background: white !important;
+    border: 1px solid #dedede !important;
+    border-radius: 8px !important;
+    padding: 16px !important;
+}
 
-        box-shadow: none !important;
+[data-testid="stSidebar"] {
+    background: white !important;
+    border-right: 1px solid #dedede !important;
+}
 
-        transition:
-            background 0.15s ease,
-            border-color 0.15s ease !important;
-    }
+[data-testid="stSidebar"] * {
+    color: #111111;
+}
 
-    div.stButton > button:hover {
-        background: #333333 !important;
-        color: #ffffff !important;
-        border-color: #333333 !important;
+[data-testid="stExpander"] {
+    background: white !important;
+    border: 1px solid #dedede !important;
+    border-radius: 8px !important;
+}
 
-        transform: none !important;
-        box-shadow: none !important;
-    }
+#MainMenu {
+    visibility: hidden;
+}
 
-    div[data-baseweb="input"] {
-        background: #ffffff !important;
-
-        border: 1px solid #d1d5db !important;
-        border-radius: 6px !important;
-
-        box-shadow: none !important;
-    }
-
-    div[data-baseweb="input"] input {
-        background: #ffffff !important;
-
-        color: #111111 !important;
-        -webkit-text-fill-color: #111111 !important;
-    }
-
-    div[data-baseweb="input"]:focus-within {
-        border-color: #111111 !important;
-        box-shadow: none !important;
-    }
-
-    input::placeholder {
-        color: #9ca3af !important;
-        -webkit-text-fill-color: #9ca3af !important;
-    }
-
-    div[data-baseweb="select"] > div {
-        background: #ffffff !important;
-        color: #111111 !important;
-
-        border: 1px solid #d1d5db !important;
-        border-radius: 6px !important;
-
-        box-shadow: none !important;
-    }
-
-    div[data-baseweb="select"] span {
-        color: #111111 !important;
-    }
-
-    li[role="option"] {
-        color: #111111 !important;
-        background: #ffffff !important;
-    }
-
-    li[role="option"]:hover {
-        background: #f3f4f6 !important;
-    }
-
-    [data-testid="stMetric"] {
-        background: #ffffff !important;
-
-        border: 1px solid #dedede !important;
-        border-radius: 8px !important;
-
-        padding: 18px 20px !important;
-
-        box-shadow: none !important;
-    }
-
-    [data-testid="stMetricLabel"] {
-        color: #6b7280 !important;
-    }
-
-    [data-testid="stMetricValue"] {
-        color: #111111 !important;
-
-        font-weight: 850 !important;
-        font-size: 2rem !important;
-    }
-
-    button[data-baseweb="tab"] {
-        color: #6b7280 !important;
-        font-weight: 700 !important;
-    }
-
-    button[data-baseweb="tab"][aria-selected="true"] {
-        color: #111111 !important;
-    }
-
-    [data-testid="stExpander"] {
-        background: #ffffff !important;
-
-        border: 1px solid #dedede !important;
-        border-radius: 8px !important;
-
-        box-shadow: none !important;
-    }
-
-    [data-testid="stSidebar"] {
-        background: #ffffff !important;
-        border-right: 1px solid #dedede !important;
-    }
-
-    [data-testid="stSidebar"] * {
-        color: #111111;
-    }
-
-    [data-testid="stSidebar"] [role="radiogroup"] label {
-        padding: 9px 12px;
-        margin-bottom: 4px;
-
-        border-radius: 6px;
-
-        border: 1px solid transparent;
-        background: transparent;
-    }
-
-    [data-testid="stSidebar"] [role="radiogroup"] label:hover {
-        background: #f3f4f6;
-        border-color: #e5e7eb;
-    }
-
-    [data-testid="stDataFrame"] {
-        background: #ffffff !important;
-
-        border: 1px solid #dedede !important;
-        border-radius: 8px !important;
-
-        overflow: hidden !important;
-
-        box-shadow: none !important;
-    }
-
-    [data-testid="stAlert"] {
-        border-radius: 6px !important;
-        box-shadow: none !important;
-    }
-
-    hr {
-        border-color: #e5e7eb !important;
-    }
-
-    #MainMenu {
-        visibility: hidden;
-    }
-
-    footer {
-        visibility: hidden;
-    }
-
-    header[data-testid="stHeader"] {
-        background: transparent;
-    }
-
-    @media (max-width: 700px) {
-
-        .block-container {
-            padding-left: 1rem !important;
-            padding-right: 1rem !important;
-        }
-
-        [data-testid="stMetricValue"] {
-            font-size: 1.6rem !important;
-        }
-    }
-
-    </style>
-    """,
+footer {
+    visibility: hidden;
+}
+</style>
+""",
     unsafe_allow_html=True,
 )
 
@@ -446,7 +263,6 @@ DEFAULT_SESSION = {
 }
 
 for key, value in DEFAULT_SESSION.items():
-
     if key not in st.session_state:
         st.session_state[key] = value
 
@@ -466,20 +282,14 @@ def clear_login():
 
 
 def go_portal():
-
     clear_login()
-
     st.session_state.screen = "portal"
-
     st.rerun()
 
 
 def go_welcome():
-
     clear_login()
-
     st.session_state.screen = "welcome"
-
     st.rerun()
 
 
@@ -493,14 +303,10 @@ def get_school(school_id):
         return None
 
     try:
-
         response = (
             db.table("schools")
             .select("*")
-            .eq(
-                "school_id",
-                str(school_id).strip()
-            )
+            .eq("school_id", str(school_id).strip())
             .execute()
         )
 
@@ -508,34 +314,22 @@ def get_school(school_id):
             return response.data[0]
 
     except Exception as error:
-        print(
-            f"get_school error: {error}"
-        )
+        print("get_school:", error)
 
     return None
 
 
-def get_school_by_admin(
-    school_id,
-    admin_id
-):
+def get_school_by_admin(school_id, admin_id):
 
-    if not db or not school_id or not admin_id:
+    if not db:
         return None
 
     try:
-
         response = (
             db.table("schools")
             .select("*")
-            .eq(
-                "school_id",
-                str(school_id).strip()
-            )
-            .eq(
-                "admin_id",
-                str(admin_id).strip()
-            )
+            .eq("school_id", str(school_id).strip())
+            .eq("admin_id", str(admin_id).strip())
             .execute()
         )
 
@@ -543,34 +337,22 @@ def get_school_by_admin(
             return response.data[0]
 
     except Exception as error:
-        print(
-            f"get_school_by_admin error: {error}"
-        )
+        print("get_school_by_admin:", error)
 
     return None
 
 
-def get_teacher(
-    school_id,
-    teacher_id
-):
+def get_teacher(school_id, teacher_id):
 
-    if not db or not school_id or not teacher_id:
+    if not db:
         return None
 
     try:
-
         response = (
             db.table("teachers")
             .select("*")
-            .eq(
-                "school_id",
-                str(school_id).strip()
-            )
-            .eq(
-                "teacher_id",
-                str(teacher_id).strip()
-            )
+            .eq("school_id", str(school_id).strip())
+            .eq("teacher_id", str(teacher_id).strip())
             .execute()
         )
 
@@ -578,23 +360,17 @@ def get_teacher(
             return response.data[0]
 
     except Exception as error:
-        print(
-            f"get_teacher error: {error}"
-        )
+        print("get_teacher:", error)
 
     return None
 
 
 def load_students():
 
-    if (
-        not db
-        or not st.session_state.school_id
-    ):
+    if not db or not st.session_state.school_id:
         return pd.DataFrame()
 
     try:
-
         response = (
             db.table("students")
             .select("*")
@@ -602,53 +378,26 @@ def load_students():
                 "school_id",
                 st.session_state.school_id
             )
-            .order("name")
             .execute()
         )
 
         if response.data:
-            return pd.DataFrame(
-                response.data
-            )
+            return pd.DataFrame(response.data)
 
-    except Exception:
-
-        try:
-
-            response = (
-                db.table("students")
-                .select("*")
-                .eq(
-                    "school_id",
-                    st.session_state.school_id
-                )
-                .execute()
-            )
-
-            if response.data:
-                return pd.DataFrame(
-                    response.data
-                )
-
-        except Exception as error:
-
-            st.error(
-                f"Could not load students: {error}"
-            )
+    except Exception as error:
+        st.error(
+            f"Could not load students: {error}"
+        )
 
     return pd.DataFrame()
 
 
 def load_attendance():
 
-    if (
-        not db
-        or not st.session_state.school_id
-    ):
+    if not db or not st.session_state.school_id:
         return pd.DataFrame()
 
     try:
-
         response = (
             db.table("attendance")
             .select("*")
@@ -656,65 +405,24 @@ def load_attendance():
                 "school_id",
                 st.session_state.school_id
             )
-            .order(
-                "created_at",
-                desc=True
-            )
             .execute()
         )
 
         if response.data:
-            return pd.DataFrame(
-                response.data
-            )
+            df = pd.DataFrame(response.data)
 
-    except Exception:
-
-        try:
-
-            response = (
-                db.table("attendance")
-                .select("*")
-                .eq(
-                    "school_id",
-                    st.session_state.school_id
-                )
-                .order(
+            if "attendance_date" in df.columns:
+                df = df.sort_values(
                     "attendance_date",
-                    desc=True
-                )
-                .execute()
-            )
-
-            if response.data:
-                return pd.DataFrame(
-                    response.data
+                    ascending=False
                 )
 
-        except Exception:
+            return df
 
-            try:
-
-                response = (
-                    db.table("attendance")
-                    .select("*")
-                    .eq(
-                        "school_id",
-                        st.session_state.school_id
-                    )
-                    .execute()
-                )
-
-                if response.data:
-                    return pd.DataFrame(
-                        response.data
-                    )
-
-            except Exception as error:
-
-                st.error(
-                    f"Could not load attendance: {error}"
-                )
+    except Exception as error:
+        st.error(
+            f"Could not load attendance: {error}"
+        )
 
     return pd.DataFrame()
 
@@ -725,45 +433,34 @@ def load_attendance():
 
 def welcome_screen():
 
-    st.markdown(
-        """
-<div style="max-width:900px; margin:70px auto 35px; text-align:center; padding:20px;">
-    <div style="font-size:0.85rem; font-weight:800; letter-spacing:0.10em; color:#6b7280; margin-bottom:18px;">
-        AI • SMART CLASSROOM
-    </div>
+    st.write("")
+    st.write("")
 
-    <div style="font-size:5rem; font-weight:900; letter-spacing:-0.05em; line-height:1; color:#111111; margin-bottom:24px;">
-        EduVision
-    </div>
-
-    <div style="max-width:650px; margin:0 auto; color:#6b7280; font-size:1.05rem; line-height:1.7;">
-        Smarter classrooms through fast attendance, classroom monitoring and simple management.
-    </div>
-</div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    left, center, right = st.columns([1.3, 1, 1.3])
+    _, center, _ = st.columns([1, 2, 1])
 
     with center:
+
+        st.caption("AI • SMART CLASSROOM")
+
+        st.title("EduVision")
+
+        st.write(
+            "Smarter classrooms through fast attendance, "
+            "classroom monitoring and simple management."
+        )
+
+        st.write("")
+
         if st.button(
             "Enter EduVision →",
             key="enter_eduvision_btn",
-            use_container_width=True,
+            use_container_width=True
         ):
             st.session_state.screen = "portal"
             st.rerun()
 
-    st.markdown(
-        """
-<div style="text-align:center; margin-top:24px; color:#6b7280; font-size:0.82rem; font-weight:650;">
-    <span style="display:inline-block; width:7px; height:7px; border-radius:50%; background:#22c55e; margin-right:7px;"></span>
-    System Online
-</div>
-        """,
-        unsafe_allow_html=True,
-    )
+        st.success("System Online")
+
 
 # ============================================================
 # PORTAL
@@ -771,7 +468,6 @@ def welcome_screen():
 
 def portal_screen():
 
-    # TOP BAR
     title_col, back_col = st.columns([4, 1])
 
     with title_col:
@@ -780,43 +476,44 @@ def portal_screen():
     with back_col:
         if st.button(
             "← Back",
-            key="portal_back_welcome",
-            use_container_width=True
+            key="portal_back_welcome"
         ):
             go_welcome()
 
-    st.write("")
     st.header("Choose your workspace")
-    st.caption("Select how you want to access EduVision.")
+    st.caption(
+        "Select how you want to access EduVision."
+    )
 
     st.write("")
 
-    # TWO PORTALS
-    school_col, admin_col = st.columns(2, gap="large")
+    school_col, admin_col = st.columns(
+        2,
+        gap="large"
+    )
 
-    # SCHOOL PORTAL
     with school_col:
 
         with st.container(border=True):
+
             st.subheader("School Portal")
 
             st.write(
-                "Access your school workspace for attendance, "
-                "students and classroom management."
+                "Access your school workspace for "
+                "attendance, students and classroom management."
             )
 
         if st.button(
             "Open School Portal →",
-            key="open_school_portal_btn",
-            use_container_width=True
+            key="open_school_portal_btn"
         ):
             st.session_state.screen = "school_portal"
             st.rerun()
 
-    # EDUVISION ADMIN
     with admin_col:
 
         with st.container(border=True):
+
             st.subheader("EduVision Admin")
 
             st.write(
@@ -825,251 +522,136 @@ def portal_screen():
 
         if st.button(
             "Open Admin →",
-            key="open_admin_portal_btn",
-            use_container_width=True
+            key="open_admin_portal_btn"
         ):
             st.session_state.screen = "platform_admin_login"
             st.rerun()
+
+
 # ============================================================
 # SCHOOL PORTAL
 # ============================================================
 
 def school_portal():
 
-    c_title, c_back = st.columns(
-        [4, 1]
-    )
+    c1, c2 = st.columns([4, 1])
 
-    with c_title:
-
-        st.markdown(
-            """
-            <div style="margin-bottom:18px;">
-
-                <div style="
-                    font-size:2rem;
-                    font-weight:900;
-                    color:#111111;
-                ">
-                    School Portal
-                </div>
-
-                <div style="
-                    color:#6b7280;
-                    margin-top:5px;
-                ">
-                    Register a school or access
-                    an approved school.
-                </div>
-
-            </div>
-            """,
-            unsafe_allow_html=True,
+    with c1:
+        st.title("School Portal")
+        st.caption(
+            "Register a school or access an approved school."
         )
 
-    with c_back:
-
+    with c2:
         if st.button(
             "← Back",
-            key="portal_back_btn",
-            use_container_width=True
+            key="school_portal_back"
         ):
             go_portal()
 
     st.divider()
 
     register_tab, open_tab = st.tabs(
-        [
-            "Register School",
-            "Open School",
-        ]
+        ["Register School", "Open School"]
     )
 
-    # ------------------------------------------------------------
-    # REGISTER
-    # ------------------------------------------------------------
-
+    # REGISTER SCHOOL
     with register_tab:
 
-        st.markdown(
-            "### Create a school workspace"
-        )
+        st.subheader("Create a school workspace")
 
         st.caption(
-            "Registration must be approved before the school can be accessed."
+            "Registration must be approved before "
+            "the school can be accessed."
         )
 
         c1, c2 = st.columns(2)
 
         with c1:
-
             school_name = st.text_input(
                 "School Name",
-                placeholder="Enter school name",
-                key="reg_school_name"
+                placeholder="Enter school name"
             )
 
             admin_id = st.text_input(
                 "School Admin ID",
-                placeholder="Create admin ID",
-                key="reg_admin_id"
+                placeholder="Create admin ID"
             )
 
         with c2:
-
             admin_password = st.text_input(
                 "Admin Password",
                 type="password",
-                placeholder="Minimum 6 characters",
-                key="reg_admin_pwd"
+                placeholder="Minimum 6 characters"
             )
 
             confirm_password = st.text_input(
                 "Confirm Password",
                 type="password",
-                placeholder="Repeat password",
-                key="reg_admin_confirm"
+                placeholder="Repeat password"
             )
-
-        st.write("")
 
         if st.button(
             "Submit Registration",
-            key="submit_reg_btn",
-            use_container_width=True
+            key="submit_school_registration"
         ):
 
-            school_name = (
-                school_name.strip()
-            )
-
-            admin_id = (
-                admin_id.strip()
-            )
+            school_name = school_name.strip()
+            admin_id = admin_id.strip()
 
             if not school_name:
-
-                st.error(
-                    "Please enter your school name."
-                )
+                st.error("Enter the school name.")
 
             elif not admin_id:
-
-                st.error(
-                    "Please enter a School Admin ID."
-                )
+                st.error("Enter an Admin ID.")
 
             elif len(admin_password) < 6:
-
                 st.error(
-                    "Password must be at least 6 characters long."
+                    "Password must contain at least 6 characters."
                 )
 
-            elif (
-                admin_password
-                != confirm_password
-            ):
-
-                st.error(
-                    "Passwords do not match."
-                )
+            elif admin_password != confirm_password:
+                st.error("Passwords do not match.")
 
             elif not db:
-
-                st.error(
-                    "Database connection is unavailable."
-                )
+                st.error("Database unavailable.")
 
             else:
 
-                school_id = (
-                    generate_school_id()
-                )
+                school_id = generate_school_id()
 
                 try:
-
-                    db.table(
-                        "schools"
-                    ).insert(
-                        {
-                            "school_id":
-                                school_id,
-
-                            "school_name":
-                                school_name,
-
-                            "admin_id":
-                                admin_id,
-
-                            "admin_password_hash":
-                                hash_password(
-                                    admin_password
-                                ),
-
-                            "approval_status":
-                                "pending",
-                        }
-                    ).execute()
+                    db.table("schools").insert({
+                        "school_id": school_id,
+                        "school_name": school_name,
+                        "admin_id": admin_id,
+                        "admin_password_hash":
+                            hash_password(admin_password),
+                        "approval_status": "pending",
+                    }).execute()
 
                     st.success(
-                        "School registration submitted successfully."
+                        "School registration submitted."
                     )
 
-                    st.markdown(
-                        f"""
-                        <div style="
-                            background:#ffffff;
-                            border:1px solid #dedede;
-                            border-radius:8px;
-                            padding:22px;
-                            margin-top:18px;
-                        ">
-
-                            <div style="
-                                color:#6b7280;
-                                font-size:0.8rem;
-                                font-weight:700;
-                            ">
-                                SAVE THESE DETAILS
-                            </div>
-
-                            <div style="
-                                font-size:1.3rem;
-                                font-weight:850;
-                                margin-top:8px;
-                            ">
-                                School ID: {school_id}
-                            </div>
-
-                            <div style="
-                                margin-top:5px;
-                            ">
-                                Admin ID:
-                                <strong>
-                                    {admin_id}
-                                </strong>
-                            </div>
-
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
+                    with st.container(border=True):
+                        st.caption("SAVE THESE DETAILS")
+                        st.subheader(
+                            f"School ID: {school_id}"
+                        )
+                        st.write(
+                            f"Admin ID: **{admin_id}**"
+                        )
 
                 except Exception as error:
-
                     st.error(
-                        f"School registration failed: {error}"
+                        f"Registration failed: {error}"
                     )
 
-    # ------------------------------------------------------------
     # OPEN SCHOOL
-    # ------------------------------------------------------------
-
     with open_tab:
 
-        st.markdown(
-            "### Open your school"
-        )
+        st.subheader("Open your school")
 
         st.caption(
             "Select an approved school to continue."
@@ -1078,9 +660,7 @@ def school_portal():
         approved_schools = []
 
         if db:
-
             try:
-
                 response = (
                     db.table("schools")
                     .select(
@@ -1098,63 +678,38 @@ def school_portal():
                 )
 
             except Exception as error:
-
                 st.error(
-                    f"Could not load school list: {error}"
+                    f"Could not load schools: {error}"
                 )
 
         if not approved_schools:
-
             st.info(
                 "No approved schools are currently available."
             )
 
         else:
 
-            school_name_to_id = {
+            school_map = {
                 school["school_name"]:
                     school["school_id"]
-
-                for school
-                in approved_schools
+                for school in approved_schools
             }
-
-            school_names = sorted(
-                school_name_to_id.keys()
-            )
 
             selected_name = st.selectbox(
                 "School",
-                school_names,
-                key="open_school_name_select"
+                sorted(school_map.keys())
             )
-
-            st.write("")
 
             if st.button(
                 "Continue →",
-                key="open_school_action_btn",
-                use_container_width=True
+                key="continue_school"
             ):
 
-                selected_id = (
-                    school_name_to_id.get(
-                        selected_name,
-                        ""
-                    )
-                )
+                school_id = school_map[selected_name]
 
-                school = get_school(
-                    selected_id
-                )
+                school = get_school(school_id)
 
-                if not school:
-
-                    st.error(
-                        "School record not found."
-                    )
-
-                else:
+                if school:
 
                     st.session_state.school_id = (
                         school["school_id"]
@@ -1170,6 +725,11 @@ def school_portal():
 
                     st.rerun()
 
+                else:
+                    st.error(
+                        "School could not be found."
+                    )
+
 
 # ============================================================
 # SCHOOL LOGIN
@@ -1177,101 +737,50 @@ def school_portal():
 
 def school_login():
 
-    school_id = (
-        st.session_state.school_id
-    )
-
-    school = get_school(
-        school_id
-    )
+    school_id = st.session_state.school_id
+    school = get_school(school_id)
 
     if not school:
 
-        st.error(
-            "School workspace not found."
-        )
+        st.error("School workspace not found.")
 
-        if st.button(
-            "← Return to School Portal"
-        ):
-
-            st.session_state.screen = (
-                "school_portal"
-            )
-
+        if st.button("Return to School Portal"):
+            st.session_state.screen = "school_portal"
             st.rerun()
 
         return
 
-    c1, c2 = st.columns(
-        [4, 1]
-    )
+    c1, c2 = st.columns([4, 1])
 
     with c1:
-
-        st.markdown(
-            f"""
-            <div style="margin-bottom:18px;">
-
-                <div style="
-                    font-size:2rem;
-                    font-weight:900;
-                ">
-                    {school['school_name']}
-                </div>
-
-                <div style="
-                    color:#6b7280;
-                    margin-top:5px;
-                ">
-                    School ID: {school_id}
-                </div>
-
-            </div>
-            """,
-            unsafe_allow_html=True,
+        st.title(school["school_name"])
+        st.caption(
+            f"School ID: {school_id}"
         )
 
     with c2:
-
         if st.button(
             "← Change School",
-            key="change_school_btn",
-            use_container_width=True
+            key="change_school"
         ):
-
             clear_login()
-
-            st.session_state.screen = (
-                "school_portal"
-            )
-
+            st.session_state.screen = "school_portal"
             st.rerun()
 
     st.divider()
 
     admin_tab, teacher_tab = st.tabs(
-        [
-            "School Admin",
-            "Teacher",
-        ]
+        ["School Admin", "Teacher"]
     )
 
-    # ------------------------------------------------------------
-    # ADMIN
-    # ------------------------------------------------------------
-
+    # ADMIN LOGIN
     with admin_tab:
 
-        _, center, _ = st.columns(
-            [1, 2, 1]
-        )
+        _, center, _ = st.columns([1, 2, 1])
 
         with center:
 
-            st.markdown(
-                "### Admin Login"
-            )
+            st.subheader("Admin Login")
 
             st.caption(
                 "Sign in to manage your school."
@@ -1279,61 +788,45 @@ def school_login():
 
             admin_id = st.text_input(
                 "Admin ID",
-                key="school_admin_id_input"
+                key="school_admin_login_id"
             )
 
             password = st.text_input(
                 "Password",
                 type="password",
-                key="school_admin_pwd_input"
+                key="school_admin_login_password"
             )
 
             if st.button(
                 "Login",
-                key="login_admin_action",
-                use_container_width=True
+                key="school_admin_login"
             ):
 
-                admin_id_clean = (
-                    admin_id.strip()
-                )
+                admin_id = admin_id.strip()
 
-                school_account = (
-                    get_school_by_admin(
-                        school_id,
-                        admin_id_clean
-                    )
+                account = get_school_by_admin(
+                    school_id,
+                    admin_id
                 )
 
                 if (
-                    school_account
+                    account
                     and hash_password(password)
-                    == school_account.get(
+                    == account.get(
                         "admin_password_hash"
                     )
                 ):
 
                     st.session_state.logged_in = True
-                    st.session_state.role = (
-                        "School Admin"
-                    )
-                    st.session_state.user_id = (
-                        admin_id_clean
-                    )
+                    st.session_state.role = "School Admin"
+                    st.session_state.user_id = admin_id
                     st.session_state.user_name = (
                         f"{school['school_name']} Admin"
                     )
-                    st.session_state.nav_page = (
-                        "Dashboard"
-                    )
-                    st.session_state.screen = (
-                        "school_app"
-                    )
+                    st.session_state.nav_page = "Dashboard"
+                    st.session_state.screen = "school_app"
 
-                    if (
-                        "sidebar_nav_radio"
-                        in st.session_state
-                    ):
+                    if "sidebar_nav_radio" in st.session_state:
                         del st.session_state[
                             "sidebar_nav_radio"
                         ]
@@ -1341,26 +834,18 @@ def school_login():
                     st.rerun()
 
                 else:
-
                     st.error(
                         "Incorrect Admin ID or password."
                     )
 
-    # ------------------------------------------------------------
-    # TEACHER
-    # ------------------------------------------------------------
-
+    # TEACHER LOGIN
     with teacher_tab:
 
-        _, center, _ = st.columns(
-            [1, 2, 1]
-        )
+        _, center, _ = st.columns([1, 2, 1])
 
         with center:
 
-            st.markdown(
-                "### Teacher Login"
-            )
+            st.subheader("Teacher Login")
 
             st.caption(
                 "Sign in to access your classroom."
@@ -1368,86 +853,64 @@ def school_login():
 
             teacher_id = st.text_input(
                 "Teacher ID",
-                key="teacher_id_input"
+                key="teacher_login_id"
             )
 
             password = st.text_input(
                 "Password",
                 type="password",
-                key="teacher_pwd_input"
+                key="teacher_login_password"
             )
 
             if st.button(
                 "Login",
-                key="login_teacher_action",
-                use_container_width=True
+                key="teacher_login"
             ):
 
-                teacher_id_clean = (
-                    teacher_id.strip()
-                )
+                teacher_id = teacher_id.strip()
 
                 teacher = get_teacher(
                     school_id,
-                    teacher_id_clean
+                    teacher_id
                 )
 
                 if not teacher:
-
                     st.error(
-                        "Teacher account not found for this school."
+                        "Teacher account not found."
                     )
 
                 elif not teacher.get(
                     "enabled",
                     True
                 ):
-
                     st.error(
-                        "This teacher account has been disabled."
+                        "This teacher account is disabled."
                     )
 
                 elif (
                     hash_password(password)
-                    != teacher.get(
-                        "password_hash"
-                    )
+                    != teacher.get("password_hash")
                 ):
-
                     st.error(
-                        "Incorrect teacher password."
+                        "Incorrect password."
                     )
 
                 else:
 
                     st.session_state.logged_in = True
-                    st.session_state.role = (
-                        "Teacher"
-                    )
-                    st.session_state.user_id = (
-                        teacher_id_clean
-                    )
+                    st.session_state.role = "Teacher"
+                    st.session_state.user_id = teacher_id
 
                     st.session_state.user_name = (
-                        teacher.get(
-                            "teacher_name"
-                        )
+                        teacher.get("teacher_name")
                         or teacher.get("name")
-                        or teacher_id_clean
+                        or teacher_id
                     )
 
-                    st.session_state.nav_page = (
-                        "Dashboard"
-                    )
+                    st.session_state.nav_page = "Dashboard"
+                    st.session_state.screen = "school_app"
 
-                    st.session_state.screen = (
-                        "school_app"
-                    )
-
-                    if (
-                        "sidebar_nav_radio"
-                        in st.session_state
-                    ):
+                    if "sidebar_nav_radio" in st.session_state:
                         del st.session_state[
                             "sidebar_nav_radio"
                         ]
@@ -1461,98 +924,58 @@ def school_login():
 
 def platform_admin_login():
 
-    c1, c2 = st.columns(
-        [4, 1]
-    )
+    c1, c2 = st.columns([4, 1])
 
     with c1:
-
-        st.markdown(
-            """
-            <div style="margin-bottom:18px;">
-
-                <div style="
-                    font-size:2rem;
-                    font-weight:900;
-                ">
-                    EduVision Admin
-                </div>
-
-                <div style="
-                    color:#6b7280;
-                    margin-top:5px;
-                ">
-                    Manage school registrations.
-                </div>
-
-            </div>
-            """,
-            unsafe_allow_html=True,
+        st.title("EduVision Admin")
+        st.caption(
+            "Manage school registrations."
         )
 
     with c2:
-
         if st.button(
             "← Back",
-            key="admin_login_back",
-            use_container_width=True
+            key="platform_admin_back"
         ):
             go_portal()
 
     st.divider()
 
-    _, center, _ = st.columns(
-        [1, 2, 1]
-    )
+    _, center, _ = st.columns([1, 2, 1])
 
     with center:
 
-        st.markdown(
-            "### Admin Login"
-        )
+        st.subheader("Admin Login")
 
         admin_id = st.text_input(
             "Admin ID",
-            key="plat_admin_id"
+            key="platform_admin_id"
         )
 
         password = st.text_input(
             "Password",
             type="password",
-            key="plat_admin_pwd"
+            key="platform_admin_password"
         )
 
         if st.button(
             "Login",
-            key="plat_login_btn",
-            use_container_width=True
+            key="platform_admin_login_button"
         ):
 
             if (
-                admin_id.strip()
-                == EDUVISION_ADMIN_ID
-                and password
-                == EDUVISION_ADMIN_PASSWORD
+                admin_id.strip() == EDUVISION_ADMIN_ID
+                and password == EDUVISION_ADMIN_PASSWORD
             ):
 
                 st.session_state.logged_in = True
-
-                st.session_state.role = (
-                    "EduVision Admin"
-                )
-
-                st.session_state.user_id = (
-                    admin_id.strip()
-                )
-
-                st.session_state.screen = (
-                    "platform_admin"
-                )
+                st.session_state.role = "EduVision Admin"
+                st.session_state.user_id = admin_id.strip()
+                st.session_state.screen = "platform_admin"
 
                 st.rerun()
 
             else:
-
                 st.error(
                     "Incorrect Admin ID or password."
                 )
@@ -1564,42 +987,18 @@ def platform_admin_login():
 
 def platform_admin_page():
 
-    c1, c2 = st.columns(
-        [4, 1]
-    )
+    c1, c2 = st.columns([4, 1])
 
     with c1:
-
-        st.markdown(
-            """
-            <div style="margin-bottom:18px;">
-
-                <div style="
-                    font-size:2rem;
-                    font-weight:900;
-                ">
-                    EduVision Admin
-                </div>
-
-                <div style="
-                    color:#6b7280;
-                    margin-top:5px;
-                ">
-                    Review and manage school
-                    registration requests.
-                </div>
-
-            </div>
-            """,
-            unsafe_allow_html=True,
+        st.title("EduVision Admin")
+        st.caption(
+            "Review and manage school registration requests."
         )
 
     with c2:
-
         if st.button(
             "Log Out",
-            key="master_logout_btn",
-            use_container_width=True
+            key="platform_logout"
         ):
             go_portal()
 
@@ -1608,62 +1007,39 @@ def platform_admin_page():
     schools = []
 
     if db:
-
         try:
-
             response = (
                 db.table("schools")
                 .select("*")
-                .order(
-                    "created_at",
-                    desc=True
-                )
                 .execute()
             )
 
-            schools = (
-                response.data or []
+            schools = response.data or []
+
+        except Exception as error:
+            st.error(
+                f"Could not load schools: {error}"
             )
-
-        except Exception:
-
-            try:
-
-                response = (
-                    db.table("schools")
-                    .select("*")
-                    .execute()
-                )
-
-                schools = (
-                    response.data or []
-                )
-
-            except Exception as error:
-
-                st.error(
-                    f"Error loading schools: {error}"
-                )
 
     pending = [
         s for s in schools
-        if s.get(
-            "approval_status"
-        ) == "pending"
+        if str(
+            s.get("approval_status", "")
+        ).lower() == "pending"
     ]
 
     approved = [
         s for s in schools
-        if s.get(
-            "approval_status"
-        ) == "approved"
+        if str(
+            s.get("approval_status", "")
+        ).lower() == "approved"
     ]
 
     rejected = [
         s for s in schools
-        if s.get(
-            "approval_status"
-        ) == "rejected"
+        if str(
+            s.get("approval_status", "")
+        ).lower() == "rejected"
     ]
 
     m1, m2, m3 = st.columns(3)
@@ -1686,185 +1062,116 @@ def platform_admin_page():
             len(rejected)
         )
 
-    tab1, tab2, tab3 = st.tabs(
-        [
-            f"Pending ({len(pending)})",
-            f"Approved ({len(approved)})",
-            f"Rejected ({len(rejected)})",
-        ]
-    )
+    tab1, tab2, tab3 = st.tabs([
+        f"Pending ({len(pending)})",
+        f"Approved ({len(approved)})",
+        f"Rejected ({len(rejected)})",
+    ])
 
-    # ------------------------------------------------------------
     # PENDING
-    # ------------------------------------------------------------
-
     with tab1:
 
-        st.markdown(
-            "### Pending Registrations"
-        )
+        st.subheader("Pending Registrations")
 
         if not pending:
-
             st.info(
                 "No school registrations are waiting for approval."
             )
 
         for school in pending:
 
-            school_id = school.get(
-                "school_id",
-                ""
-            )
-
-            school_name = school.get(
+            sid = school.get("school_id", "")
+            name = school.get(
                 "school_name",
                 "Unnamed School"
             )
+            aid = school.get("admin_id", "")
 
-            admin_id = school.get(
-                "admin_id",
-                ""
-            )
+            with st.container(border=True):
 
-            st.markdown(
-                f"""
-                <div style="
-                    background:#ffffff;
-                    border:1px solid #dedede;
-                    border-radius:8px;
-                    padding:22px;
-                    margin:16px 0 12px;
-                ">
+                st.subheader(name)
+                st.write(
+                    f"**School ID:** {sid}"
+                )
+                st.write(
+                    f"**Admin ID:** {aid}"
+                )
 
-                    <div style="
-                        font-size:1.2rem;
-                        font-weight:850;
-                    ">
-                        {school_name}
-                    </div>
+                c1, c2 = st.columns(2)
 
-                    <div style="
-                        color:#6b7280;
-                        margin-top:10px;
-                    ">
-                        School ID: {school_id}
-                        <br>
-                        Admin ID: {admin_id}
-                    </div>
+                with c1:
 
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-            approve_col, reject_col = (
-                st.columns(2)
-            )
-
-            with approve_col:
-
-                if st.button(
-                    "Approve",
-                    key=f"app_{school_id}",
-                    use_container_width=True
-                ):
-
-                    try:
-
-                        payload = {
-                            "approval_status":
-                                "approved",
-
-                            "approved_by":
-                                st.session_state.user_id,
-
-                            "approved_at":
-                                datetime.now(
-                                    timezone.utc
-                                ).isoformat(),
-                        }
-
-                        (
-                            db.table("schools")
-                            .update(payload)
-                            .eq(
-                                "school_id",
-                                school_id
-                            )
-                            .execute()
-                        )
-
-                        st.rerun()
-
-                    except Exception:
+                    if st.button(
+                        "Approve",
+                        key=f"approve_{sid}"
+                    ):
 
                         try:
 
-                            (
-                                db.table("schools")
-                                .update({
+                            try:
+                                db.table(
+                                    "schools"
+                                ).update({
+                                    "approval_status":
+                                        "approved",
+                                    "approved_by":
+                                        st.session_state.user_id,
+                                    "approved_at":
+                                        datetime.now(
+                                            timezone.utc
+                                        ).isoformat(),
+                                }).eq(
+                                    "school_id",
+                                    sid
+                                ).execute()
+
+                            except Exception:
+                                db.table(
+                                    "schools"
+                                ).update({
                                     "approval_status":
                                         "approved"
-                                })
-                                .eq(
+                                }).eq(
                                     "school_id",
-                                    school_id
-                                )
-                                .execute()
-                            )
+                                    sid
+                                ).execute()
 
                             st.rerun()
 
                         except Exception as error:
-
                             st.error(
-                                f"Approval error: {error}"
+                                f"Approval failed: {error}"
                             )
 
-            with reject_col:
+                with c2:
 
-                if st.button(
-                    "Reject",
-                    key=f"rej_{school_id}",
-                    use_container_width=True
-                ):
+                    if st.button(
+                        "Reject",
+                        key=f"reject_{sid}"
+                    ):
 
-                    try:
-
-                        (
-                            db.table("schools")
-                            .update({
+                        try:
+                            db.table(
+                                "schools"
+                            ).update({
                                 "approval_status":
                                     "rejected"
-                            })
-                            .eq(
+                            }).eq(
                                 "school_id",
-                                school_id
-                            )
-                            .execute()
-                        )
+                                sid
+                            ).execute()
 
-                        st.rerun()
+                            st.rerun()
 
-                    except Exception as error:
+                        except Exception as error:
+                            st.error(str(error))
 
-                        st.error(
-                            f"Rejection error: {error}"
-                        )
-
-    # ------------------------------------------------------------
     # APPROVED
-    # ------------------------------------------------------------
-
     with tab2:
 
-        st.markdown(
-            "### Approved Schools"
-        )
+        st.subheader("Approved Schools")
 
         if not approved:
-
             st.info(
                 "No schools have been approved yet."
             )
@@ -1874,31 +1181,25 @@ def platform_admin_page():
             rows = []
 
             for school in approved:
-
-                rows.append(
-                    {
-                        "School Name":
-                            school.get(
-                                "school_name",
-                                ""
-                            ),
-
-                        "School ID":
-                            school.get(
-                                "school_id",
-                                ""
-                            ),
-
-                        "Admin ID":
-                            school.get(
-                                "admin_id",
-                                ""
-                            ),
-
-                        "Status":
-                            "Approved",
-                    }
-                )
+                rows.append({
+                    "School Name":
+                        school.get(
+                            "school_name",
+                            ""
+                        ),
+                    "School ID":
+                        school.get(
+                            "school_id",
+                            ""
+                        ),
+                    "Admin ID":
+                        school.get(
+                            "admin_id",
+                            ""
+                        ),
+                    "Status":
+                        "Approved",
+                })
 
             st.dataframe(
                 pd.DataFrame(rows),
@@ -1906,87 +1207,51 @@ def platform_admin_page():
                 hide_index=True
             )
 
-    # ------------------------------------------------------------
     # REJECTED
-    # ------------------------------------------------------------
-
     with tab3:
 
-        st.markdown(
-            "### Rejected Schools"
-        )
+        st.subheader("Rejected Schools")
 
         if not rejected:
-
             st.info(
                 "No rejected school registrations."
             )
 
         for school in rejected:
 
-            school_id = school.get(
-                "school_id",
-                ""
-            )
-
-            school_name = school.get(
+            sid = school.get("school_id", "")
+            name = school.get(
                 "school_name",
                 ""
             )
 
-            st.markdown(
-                f"""
-                <div style="
-                    background:#ffffff;
-                    border:1px solid #dedede;
-                    border-radius:8px;
-                    padding:18px;
-                    margin:14px 0;
-                ">
-                    <strong>
-                        {school_name}
-                    </strong>
+            with st.container(border=True):
 
-                    <div style="
-                        color:#6b7280;
-                        margin-top:5px;
-                    ">
-                        School ID:
-                        {school_id}
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+                st.subheader(name)
+                st.write(
+                    f"**School ID:** {sid}"
+                )
 
-            if st.button(
-                "Restore to Pending",
-                key=f"restore_{school_id}",
-                use_container_width=True
-            ):
+                if st.button(
+                    "Restore to Pending",
+                    key=f"restore_{sid}"
+                ):
 
-                try:
-
-                    (
-                        db.table("schools")
-                        .update({
+                    try:
+                        db.table(
+                            "schools"
+                        ).update({
                             "approval_status":
                                 "pending"
-                        })
-                        .eq(
+                        }).eq(
                             "school_id",
-                            school_id
-                        )
-                        .execute()
-                    )
+                            sid
+                        ).execute()
 
-                    st.rerun()
+                        st.rerun()
 
-                except Exception as error:
-
-                    st.error(
-                        str(error)
-                    )
+                    except Exception as error:
+                        st.error(str(error))
 
 
 # ============================================================
@@ -1998,14 +1263,37 @@ def dashboard_page():
     students = load_students()
     attendance = load_attendance()
 
-    today_str = (
-        datetime.now()
-        .strftime("%Y-%m-%d")
+    # Count only approved/active students
+    if (
+        not students.empty
+        and "status" in students.columns
+    ):
+        student_status = (
+            students["status"]
+            .fillna("Active")
+            .astype(str)
+            .str.strip()
+            .str.lower()
+        )
+
+        active_students = students[
+            ~student_status.isin(
+                ["pending", "declined"]
+            )
+        ]
+
+    else:
+        active_students = students
+
+    total_students = len(active_students)
+
+    today = datetime.now().strftime(
+        "%Y-%m-%d"
     )
 
-    present_today = 0
-    late_today = 0
-    absent_today = 0
+    present = 0
+    late = 0
+    absent = 0
 
     if (
         not attendance.empty
@@ -2014,100 +1302,65 @@ def dashboard_page():
     ):
 
         today_rows = attendance[
-            attendance[
-                "attendance_date"
-            ].astype(str) == today_str
+            attendance["attendance_date"]
+            .astype(str) == today
         ]
 
         if "status" in today_rows.columns:
 
-            present_today = len(
-                today_rows[
-                    today_rows["status"]
-                    == "Present"
-                ]
+            statuses = (
+                today_rows["status"]
+                .astype(str)
+                .str.lower()
             )
 
-            late_today = len(
-                today_rows[
-                    today_rows["status"]
-                    == "Late"
-                ]
-            )
+            present = (
+                statuses == "present"
+            ).sum()
 
-            absent_today = len(
-                today_rows[
-                    today_rows["status"]
-                    == "Absent"
-                ]
-            )
+            late = (
+                statuses == "late"
+            ).sum()
 
-    total_students = len(
-        students
-    )
+            absent = (
+                statuses == "absent"
+            ).sum()
 
-    attendance_percentage = (
+    percentage = (
         round(
-            (
-                present_today
-                / total_students
-            ) * 100,
+            (present / total_students) * 100,
             1
         )
-        if total_students > 0
+        if total_students
         else 0.0
     )
 
-    current_hour = (
-        datetime.now().hour
-    )
+    hour = datetime.now().hour
 
-    if current_hour < 12:
+    if hour < 12:
         greeting = "Good Morning"
-
-    elif current_hour < 17:
+    elif hour < 17:
         greeting = "Good Afternoon"
-
     else:
         greeting = "Good Evening"
 
-    user_display = (
+    user = (
         st.session_state.user_name
         or st.session_state.user_id
         or "Educator"
     )
 
-    st.markdown(
-        f"""
-        <div style="margin-bottom:32px;">
-
-            <div style="
-                font-size:2.2rem;
-                font-weight:900;
-                color:#111111;
-            ">
-                {greeting}, {user_display}
-            </div>
-
-            <div style="
-                color:#6b7280;
-                margin-top:5px;
-            ">
-                {st.session_state.school_name}
-            </div>
-
-        </div>
-        """,
-        unsafe_allow_html=True,
+    st.title(
+        f"{greeting}, {user}"
     )
 
-    st.markdown(
-        "### Today's Overview"
+    st.caption(
+        st.session_state.school_name
     )
 
-    m1, m2, m3, m4 = (
-        st.columns(4)
-    )
+    st.subheader("Today's Overview")
+
+    m1, m2, m3, m4 = st.columns(4)
 
     with m1:
         st.metric(
@@ -2118,157 +1371,95 @@ def dashboard_page():
     with m2:
         st.metric(
             "Present",
-            present_today
+            int(present)
         )
 
     with m3:
         st.metric(
             "Absent",
-            absent_today
+            int(absent)
         )
 
     with m4:
         st.metric(
             "Attendance",
-            f"{attendance_percentage}%"
+            f"{percentage}%"
         )
 
-    st.write("")
+    with st.container(border=True):
 
-    st.markdown(
-        f"""
-        <div style="
-            background:#ffffff;
-            border:1px solid #dedede;
-            border-radius:8px;
-            padding:20px 24px;
-            margin-bottom:32px;
-        ">
+        c1, c2, c3 = st.columns(3)
 
-            Present: <strong>
-                {present_today}
-            </strong>
+        with c1:
+            st.metric(
+                "Present",
+                int(present)
+            )
 
-            &nbsp;&nbsp;&nbsp;
+        with c2:
+            st.metric(
+                "Late",
+                int(late)
+            )
 
-            Late: <strong>
-                {late_today}
-            </strong>
+        with c3:
+            st.metric(
+                "Absent",
+                int(absent)
+            )
 
-            &nbsp;&nbsp;&nbsp;
+    st.subheader("Quick Actions")
 
-            Absent: <strong>
-                {absent_today}
-            </strong>
+    c1, c2 = st.columns(2)
 
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    with c1:
 
-    st.markdown(
-        "### Quick Actions"
-    )
-
-    a1, a2 = st.columns(2)
-
-    with a1:
-
-        st.markdown(
-            """
-            <div style="
-                background:#ffffff;
-                border:1px solid #dedede;
-                border-radius:8px;
-                padding:24px;
-                min-height:125px;
-            ">
-
-                <div style="
-                    font-size:1.2rem;
-                    font-weight:850;
-                ">
-                    Smart Attendance
-                </div>
-
-                <div style="
-                    color:#6b7280;
-                    margin-top:8px;
-                ">
-                    Take and review classroom
-                    attendance.
-                </div>
-
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        st.write("")
+        with st.container(border=True):
+            st.subheader(
+                "Smart Attendance"
+            )
+            st.write(
+                "Take and review classroom attendance."
+            )
 
         if st.button(
             "Open Attendance →",
-            key="dash_goto_attendance",
-            use_container_width=True
+            key="dashboard_attendance"
         ):
-
             st.session_state.nav_page = (
                 "Smart Attendance"
             )
 
-            st.session_state[
-                "sidebar_nav_radio"
-            ] = "Smart Attendance"
+            if "sidebar_nav_radio" in st.session_state:
+                del st.session_state[
+                    "sidebar_nav_radio"
+                ]
 
             st.rerun()
 
-    with a2:
+    with c2:
 
-        st.markdown(
-            """
-            <div style="
-                background:#ffffff;
-                border:1px solid #dedede;
-                border-radius:8px;
-                padding:24px;
-                min-height:125px;
-            ">
-
-                <div style="
-                    font-size:1.2rem;
-                    font-weight:850;
-                ">
-                    Smart Occupancy
-                </div>
-
-                <div style="
-                    color:#6b7280;
-                    margin-top:8px;
-                ">
-                    Monitor classroom occupancy
-                    and room status.
-                </div>
-
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        st.write("")
+        with st.container(border=True):
+            st.subheader(
+                "Smart Occupancy"
+            )
+            st.write(
+                "Monitor classroom occupancy "
+                "and room status."
+            )
 
         if st.button(
             "Open Occupancy →",
-            key="dash_goto_occupancy",
-            use_container_width=True
+            key="dashboard_occupancy"
         ):
-
             st.session_state.nav_page = (
                 "Smart Occupancy"
             )
 
-            st.session_state[
-                "sidebar_nav_radio"
-            ] = "Smart Occupancy"
+            if "sidebar_nav_radio" in st.session_state:
+                del st.session_state[
+                    "sidebar_nav_radio"
+                ]
 
             st.rerun()
 
@@ -2289,48 +1480,25 @@ def students_page():
         == "Teacher"
     )
 
-    st.markdown(
-        """
-        <div style="margin-bottom:28px;">
+    st.title("Students")
 
-            <div style="
-                font-size:2rem;
-                font-weight:900;
-            ">
-                Students
-            </div>
-
-            <div style="
-                color:#6b7280;
-                margin-top:5px;
-            ">
-                View and manage student registrations.
-            </div>
-
-        </div>
-        """,
-        unsafe_allow_html=True,
+    st.caption(
+        "View and manage student registrations."
     )
 
     students = load_students()
 
-    if (
-        students.empty
-        or "status"
-        not in students.columns
-    ):
+    if students.empty:
 
-        pending_students = (
-            pd.DataFrame()
-        )
+        pending_students = pd.DataFrame()
+        active_students = pd.DataFrame()
+        declined_students = pd.DataFrame()
 
-        active_students = (
-            students.copy()
-        )
+    elif "status" not in students.columns:
 
-        declined_students = (
-            pd.DataFrame()
-        )
+        pending_students = pd.DataFrame()
+        declined_students = pd.DataFrame()
+        active_students = students.copy()
 
     else:
 
@@ -2342,28 +1510,19 @@ def students_page():
             .str.lower()
         )
 
-        pending_students = (
-            students[
-                status == "pending"
-            ].copy()
-        )
+        pending_students = students[
+            status == "pending"
+        ].copy()
 
-        declined_students = (
-            students[
-                status == "declined"
-            ].copy()
-        )
+        declined_students = students[
+            status == "declined"
+        ].copy()
 
-        active_students = (
-            students[
-                ~status.isin(
-                    [
-                        "pending",
-                        "declined"
-                    ]
-                )
-            ].copy()
-        )
+        active_students = students[
+            ~status.isin(
+                ["pending", "declined"]
+            )
+        ].copy()
 
     m1, m2 = st.columns(2)
 
@@ -2379,10 +1538,7 @@ def students_page():
             len(pending_students)
         )
 
-    # ------------------------------------------------------------
-    # TEACHER REGISTER
-    # ------------------------------------------------------------
-
+    # TEACHER REGISTRATION
     if is_teacher:
 
         with st.expander(
@@ -2395,99 +1551,75 @@ def students_page():
 
                 student_id = st.text_input(
                     "Student ID",
-                    key="teacher_reg_student_id"
+                    key="new_student_id"
                 )
 
                 student_name = st.text_input(
                     "Full Name",
-                    key="teacher_reg_student_name"
+                    key="new_student_name"
                 )
 
             with c2:
 
                 class_name = st.text_input(
                     "Class / Grade",
-                    key="teacher_reg_student_class"
+                    key="new_student_class"
                 )
 
                 roll_no = st.text_input(
                     "Roll Number",
-                    key="teacher_reg_student_roll"
+                    key="new_student_roll"
                 )
 
             if st.button(
                 "Submit for Approval",
-                key="teacher_submit_student_btn",
-                use_container_width=True
+                key="submit_new_student"
             ):
 
-                student_id = (
-                    student_id.strip()
-                )
-
-                student_name = (
-                    student_name.strip()
-                )
-
-                class_name = (
-                    class_name.strip()
-                )
-
-                roll_no = (
-                    roll_no.strip()
-                )
+                student_id = student_id.strip()
+                student_name = student_name.strip()
+                class_name = class_name.strip()
+                roll_no = roll_no.strip()
 
                 if not student_id:
-
                     st.error(
-                        "Please enter a Student ID."
+                        "Enter a Student ID."
                     )
 
                 elif not student_name:
-
                     st.error(
-                        "Please enter the student's name."
+                        "Enter the student's name."
                     )
 
                 elif not class_name:
-
                     st.error(
-                        "Please enter the student's class."
+                        "Enter the class."
                     )
 
                 elif not db:
-
                     st.error(
-                        "Database connection unavailable."
+                        "Database unavailable."
                     )
 
                 else:
 
                     try:
-
                         db.table(
                             "students"
-                        ).insert(
-                            {
-                                "school_id":
-                                    st.session_state.school_id,
-
-                                "student_id":
-                                    student_id,
-
-                                "name":
-                                    student_name,
-
-                                "class_name":
-                                    class_name,
-
-                                "roll_no":
-                                    roll_no,
-
-                                "status":
-                                    "Pending",
-                            }
-                        ).execute()
+                        ).insert({
+                            "school_id":
+                                st.session_state.school_id,
+                            "student_id":
+                                student_id,
+                            "name":
+                                student_name,
+                            "class_name":
+                                class_name,
+                            "roll_no":
+                                roll_no,
+                            "status":
+                                "Pending",
+                        }).execute()
 
                         st.success(
                             "Student submitted for approval."
@@ -2496,30 +1628,27 @@ def students_page():
                         st.rerun()
 
                     except Exception as error:
-
                         st.error(
-                            f"Could not submit student: {error}"
+                            f"Could not register student: {error}"
                         )
 
-    # ------------------------------------------------------------
     # ADMIN APPROVAL
-    # ------------------------------------------------------------
-
     if is_admin:
 
-        st.markdown(
-            "### Pending Registrations"
+        st.subheader(
+            "Pending Registrations"
         )
 
         if pending_students.empty:
 
             st.info(
-                "No student registrations are waiting for approval."
+                "No student registrations "
+                "are waiting for approval."
             )
 
         else:
 
-            visible = [
+            columns = [
                 c for c in [
                     "student_id",
                     "name",
@@ -2527,35 +1656,40 @@ def students_page():
                     "roll_no",
                     "status",
                 ]
-                if c
-                in pending_students.columns
+                if c in pending_students.columns
             ]
 
             st.dataframe(
-                pending_students[visible],
+                pending_students[columns],
                 use_container_width=True,
                 hide_index=True
             )
 
-            pending_map = {
-                f"{row.get('student_id')} — {row.get('name')}":
-                    row.get("student_id")
+            options = {}
 
-                for _, row
-                in pending_students.iterrows()
-            }
+            for _, row in pending_students.iterrows():
+
+                sid = row.get(
+                    "student_id",
+                    ""
+                )
+
+                name = row.get(
+                    "name",
+                    ""
+                )
+
+                options[
+                    f"{sid} — {name}"
+                ] = sid
 
             selected = st.selectbox(
                 "Select Student",
-                list(
-                    pending_map.keys()
-                ),
-                key="pending_student_review_select"
+                list(options.keys()),
+                key="pending_student_select"
             )
 
-            selected_id = (
-                pending_map[selected]
-            )
+            sid = options[selected]
 
             c1, c2 = st.columns(2)
 
@@ -2563,79 +1697,54 @@ def students_page():
 
                 if st.button(
                     "Approve",
-                    key="approve_student_btn",
-                    use_container_width=True
+                    key="approve_student"
                 ):
 
                     try:
-
-                        (
-                            db.table("students")
-                            .update({
-                                "status":
-                                    "Active"
-                            })
-                            .eq(
-                                "school_id",
-                                st.session_state.school_id
-                            )
-                            .eq(
-                                "student_id",
-                                selected_id
-                            )
-                            .execute()
-                        )
+                        db.table(
+                            "students"
+                        ).update({
+                            "status": "Active"
+                        }).eq(
+                            "school_id",
+                            st.session_state.school_id
+                        ).eq(
+                            "student_id",
+                            sid
+                        ).execute()
 
                         st.rerun()
 
                     except Exception as error:
-
-                        st.error(
-                            str(error)
-                        )
+                        st.error(str(error))
 
             with c2:
 
                 if st.button(
                     "Decline",
-                    key="decline_student_btn",
-                    use_container_width=True
+                    key="decline_student"
                 ):
 
                     try:
-
-                        (
-                            db.table("students")
-                            .update({
-                                "status":
-                                    "Declined"
-                            })
-                            .eq(
-                                "school_id",
-                                st.session_state.school_id
-                            )
-                            .eq(
-                                "student_id",
-                                selected_id
-                            )
-                            .execute()
-                        )
+                        db.table(
+                            "students"
+                        ).update({
+                            "status": "Declined"
+                        }).eq(
+                            "school_id",
+                            st.session_state.school_id
+                        ).eq(
+                            "student_id",
+                            sid
+                        ).execute()
 
                         st.rerun()
 
                     except Exception as error:
+                        st.error(str(error))
 
-                        st.error(
-                            str(error)
-                        )
-
-    # ------------------------------------------------------------
-    # ACTIVE
-    # ------------------------------------------------------------
-
-    st.markdown(
-        "### Active Students"
-    )
+    # ACTIVE STUDENTS
+    st.subheader("Active Students")
 
     if active_students.empty:
 
@@ -2645,7 +1754,7 @@ def students_page():
 
     else:
 
-        visible = [
+        columns = [
             c for c in [
                 "student_id",
                 "name",
@@ -2653,30 +1762,27 @@ def students_page():
                 "roll_no",
                 "status",
             ]
-            if c
-            in active_students.columns
+            if c in active_students.columns
         ]
 
         st.dataframe(
-            active_students[visible],
+            active_students[columns],
             use_container_width=True,
             hide_index=True
         )
 
-    # ------------------------------------------------------------
-    # PENDING FOR TEACHER
-    # ------------------------------------------------------------
-
+    # TEACHER PENDING
     if (
         is_teacher
         and not pending_students.empty
     ):
 
         with st.expander(
-            f"Pending Registrations ({len(pending_students)})"
+            f"Pending Registrations "
+            f"({len(pending_students)})"
         ):
 
-            visible = [
+            columns = [
                 c for c in [
                     "student_id",
                     "name",
@@ -2684,24 +1790,17 @@ def students_page():
                     "roll_no",
                     "status",
                 ]
-                if c
-                in pending_students.columns
+                if c in pending_students.columns
             ]
 
             st.dataframe(
-                pending_students[visible],
+                pending_students[columns],
                 use_container_width=True,
                 hide_index=True
             )
 
-    # ------------------------------------------------------------
-    # REMOVE
-    # ------------------------------------------------------------
-
-    if (
-        is_admin
-        and not students.empty
-    ):
+    # ADMIN REMOVE
+    if is_admin and not students.empty:
 
         st.divider()
 
@@ -2709,55 +1808,52 @@ def students_page():
             "Remove Student"
         ):
 
-            student_map = {
-                f"{row.get('student_id')} — {row.get('name')}":
-                    row.get("student_id")
+            student_map = {}
 
-                for _, row
-                in students.iterrows()
-            }
+            for _, row in students.iterrows():
+
+                sid = row.get(
+                    "student_id",
+                    ""
+                )
+
+                name = row.get(
+                    "name",
+                    ""
+                )
+
+                student_map[
+                    f"{sid} — {name}"
+                ] = sid
 
             selected = st.selectbox(
                 "Student",
-                list(
-                    student_map.keys()
-                ),
-                key="del_student_select"
+                list(student_map.keys()),
+                key="remove_student_select"
             )
 
             if st.button(
                 "Remove Student",
-                key="del_student_btn",
-                use_container_width=True
+                key="remove_student_button"
             ):
 
-                sid = (
-                    student_map[selected]
-                )
+                sid = student_map[selected]
 
                 try:
-
-                    (
-                        db.table("students")
-                        .delete()
-                        .eq(
-                            "school_id",
-                            st.session_state.school_id
-                        )
-                        .eq(
-                            "student_id",
-                            sid
-                        )
-                        .execute()
-                    )
+                    db.table(
+                        "students"
+                    ).delete().eq(
+                        "school_id",
+                        st.session_state.school_id
+                    ).eq(
+                        "student_id",
+                        sid
+                    ).execute()
 
                     st.rerun()
 
                 except Exception as error:
-
-                    st.error(
-                        str(error)
-                    )
+                    st.error(str(error))
 
 
 # ============================================================
@@ -2766,38 +1862,17 @@ def students_page():
 
 def teachers_page():
 
-    if (
-        st.session_state.role
-        != "School Admin"
-    ):
+    if st.session_state.role != "School Admin":
 
         st.error(
             "School Admin access required."
         )
-
         return
 
-    st.markdown(
-        """
-        <div style="margin-bottom:28px;">
+    st.title("Teachers")
 
-            <div style="
-                font-size:2rem;
-                font-weight:900;
-            ">
-                Teachers
-            </div>
-
-            <div style="
-                color:#6b7280;
-                margin-top:5px;
-            ">
-                Create and manage teacher accounts.
-            </div>
-
-        </div>
-        """,
-        unsafe_allow_html=True,
+    st.caption(
+        "Create and manage teacher accounts."
     )
 
     teachers = []
@@ -2805,7 +1880,6 @@ def teachers_page():
     if db:
 
         try:
-
             response = (
                 db.table("teachers")
                 .select("*")
@@ -2816,38 +1890,31 @@ def teachers_page():
                 .execute()
             )
 
-            teachers = (
-                response.data or []
-            )
+            teachers = response.data or []
 
         except Exception as error:
-
             st.error(
-                f"Error loading teachers: {error}"
+                f"Could not load teachers: {error}"
             )
 
-    active_teachers = [
-        t for t in teachers
-        if t.get(
-            "enabled",
-            True
-        )
+    active = [
+        teacher
+        for teacher in teachers
+        if teacher.get("enabled", True)
     ]
 
-    m1, m2 = st.columns(2)
+    c1, c2 = st.columns(2)
 
-    with m1:
-
+    with c1:
         st.metric(
             "Total Teachers",
             len(teachers)
         )
 
-    with m2:
-
+    with c2:
         st.metric(
             "Active Accounts",
-            len(active_teachers)
+            len(active)
         )
 
     with st.expander(
@@ -2858,96 +1925,85 @@ def teachers_page():
 
         with c1:
 
-            t_id = st.text_input(
+            teacher_id = st.text_input(
                 "Teacher ID",
-                key="add_t_id"
+                key="create_teacher_id"
             )
 
-            t_name = st.text_input(
+            teacher_name = st.text_input(
                 "Teacher Name",
-                key="add_t_name"
+                key="create_teacher_name"
             )
 
         with c2:
 
-            t_pwd = st.text_input(
+            teacher_password = st.text_input(
                 "Temporary Password",
                 type="password",
-                key="add_t_pwd"
+                key="create_teacher_password"
             )
 
         if st.button(
             "Create Teacher",
-            key="submit_add_teacher_btn",
-            use_container_width=True
+            key="create_teacher_button"
         ):
 
-            t_id = t_id.strip()
-            t_name = t_name.strip()
+            teacher_id = teacher_id.strip()
+            teacher_name = teacher_name.strip()
 
-            if not t_id:
-
+            if not teacher_id:
                 st.error(
-                    "Please enter a Teacher ID."
+                    "Enter a Teacher ID."
                 )
 
-            elif not t_name:
-
+            elif not teacher_name:
                 st.error(
-                    "Please enter the teacher's name."
+                    "Enter the teacher's name."
                 )
 
-            elif len(t_pwd) < 6:
-
+            elif len(teacher_password) < 6:
                 st.error(
-                    "Password must be at least 6 characters."
+                    "Password must contain at least 6 characters."
                 )
 
             else:
 
                 try:
-
                     db.table(
                         "teachers"
-                    ).insert(
-                        {
-                            "school_id":
-                                st.session_state.school_id,
+                    ).insert({
+                        "school_id":
+                            st.session_state.school_id,
+                        "teacher_id":
+                            teacher_id,
+                        "teacher_name":
+                            teacher_name,
+                        "password_hash":
+                            hash_password(
+                                teacher_password
+                            ),
+                        "enabled":
+                            True,
+                    }).execute()
 
-                            "teacher_id":
-                                t_id,
-
-                            "teacher_name":
-                                t_name,
-
-                            "password_hash":
-                                hash_password(
-                                    t_pwd
-                                ),
-
-                            "enabled":
-                                True,
-                        }
-                    ).execute()
+                    st.success(
+                        "Teacher account created."
+                    )
 
                     st.rerun()
 
                 except Exception as error:
-
                     st.error(
                         f"Could not create teacher: {error}"
                     )
 
-    st.markdown(
-        "### Teacher Accounts"
-    )
+    st.subheader("Teacher Accounts")
 
     if not teachers:
 
         st.info(
             "No teacher accounts have been created yet."
         )
-
         return
 
     rows = []
@@ -2955,38 +2011,27 @@ def teachers_page():
     for teacher in teachers:
 
         name = (
-            teacher.get(
-                "teacher_name"
-            )
+            teacher.get("teacher_name")
             or teacher.get("name")
-            or teacher.get(
-                "teacher_id",
-                ""
-            )
+            or teacher.get("teacher_id", "")
         )
 
-        rows.append(
-            {
-                "Teacher ID":
-                    teacher.get(
-                        "teacher_id",
-                        ""
-                    ),
-
-                "Name":
-                    name,
-
-                "Status":
-                    (
-                        "Enabled"
-                        if teacher.get(
-                            "enabled",
-                            True
-                        )
-                        else "Disabled"
-                    ),
-            }
-        )
+        rows.append({
+            "Teacher ID":
+                teacher.get(
+                    "teacher_id",
+                    ""
+                ),
+            "Name":
+                name,
+            "Status":
+                "Enabled"
+                if teacher.get(
+                    "enabled",
+                    True
+                )
+                else "Disabled",
+        })
 
     st.dataframe(
         pd.DataFrame(rows),
@@ -2994,11 +2039,9 @@ def teachers_page():
         hide_index=True
     )
 
-    with st.expander(
-        "Manage Teacher"
-    ):
+    with st.expander("Manage Teacher"):
 
-        options = {}
+        teacher_map = {}
 
         for teacher in teachers:
 
@@ -3008,28 +2051,24 @@ def teachers_page():
             )
 
             name = (
-                teacher.get(
-                    "teacher_name"
-                )
+                teacher.get("teacher_name")
                 or teacher.get("name")
                 or tid
             )
 
-            options[
+            teacher_map[
                 f"{tid} — {name}"
             ] = teacher
 
         selected = st.selectbox(
             "Teacher",
-            list(options.keys()),
-            key="manage_t_select"
+            list(teacher_map.keys()),
+            key="manage_teacher_select"
         )
 
-        target = (
-            options[selected]
-        )
+        teacher = teacher_map[selected]
 
-        enabled = target.get(
+        enabled = teacher.get(
             "enabled",
             True
         )
@@ -3046,72 +2085,50 @@ def teachers_page():
 
             if st.button(
                 label,
-                key="toggle_teacher_status",
-                use_container_width=True
+                key="toggle_teacher"
             ):
 
                 try:
-
-                    (
-                        db.table("teachers")
-                        .update({
-                            "enabled":
-                                not enabled
-                        })
-                        .eq(
-                            "school_id",
-                            st.session_state.school_id
-                        )
-                        .eq(
-                            "teacher_id",
-                            target[
-                                "teacher_id"
-                            ]
-                        )
-                        .execute()
-                    )
+                    db.table(
+                        "teachers"
+                    ).update({
+                        "enabled":
+                            not enabled
+                    }).eq(
+                        "school_id",
+                        st.session_state.school_id
+                    ).eq(
+                        "teacher_id",
+                        teacher["teacher_id"]
+                    ).execute()
 
                     st.rerun()
 
                 except Exception as error:
-
-                    st.error(
-                        str(error)
-                    )
+                    st.error(str(error))
 
         with c2:
 
             if st.button(
                 "Delete Teacher",
-                key="delete_teacher_btn",
-                use_container_width=True
+                key="delete_teacher"
             ):
 
                 try:
-
-                    (
-                        db.table("teachers")
-                        .delete()
-                        .eq(
-                            "school_id",
-                            st.session_state.school_id
-                        )
-                        .eq(
-                            "teacher_id",
-                            target[
-                                "teacher_id"
-                            ]
-                        )
-                        .execute()
-                    )
+                    db.table(
+                        "teachers"
+                    ).delete().eq(
+                        "school_id",
+                        st.session_state.school_id
+                    ).eq(
+                        "teacher_id",
+                        teacher["teacher_id"]
+                    ).execute()
 
                     st.rerun()
 
                 except Exception as error:
-
-                    st.error(
-                        str(error)
-                    )
+                    st.error(str(error))
 
 
 # ============================================================
@@ -3120,60 +2137,50 @@ def teachers_page():
 
 def attendance_page():
 
-    st.markdown(
-        """
-        <div style="margin-bottom:28px;">
+    st.title("Smart Attendance")
 
-            <div style="
-                font-size:2rem;
-                font-weight:900;
-            ">
-                Smart Attendance
-            </div>
-
-            <div style="
-                color:#6b7280;
-                margin-top:5px;
-            ">
-                Take attendance and review attendance records.
-            </div>
-
-        </div>
-        """,
-        unsafe_allow_html=True,
+    st.caption(
+        "Take attendance and review attendance records."
     )
 
     students = load_students()
 
-    camera_tab, manual_tab, history_tab = (
-        st.tabs(
-            [
-                "Camera",
-                "Manual",
-                "Records",
-            ]
+    # Only active students
+    if (
+        not students.empty
+        and "status" in students.columns
+    ):
+
+        status = (
+            students["status"]
+            .fillna("Active")
+            .astype(str)
+            .str.lower()
         )
+
+        students = students[
+            ~status.isin(
+                ["pending", "declined"]
+            )
+        ].copy()
+
+    camera_tab, manual_tab, records_tab = st.tabs(
+        ["Camera", "Manual", "Records"]
     )
 
-    # ------------------------------------------------------------
     # CAMERA
-    # ------------------------------------------------------------
-
     with camera_tab:
 
-        st.markdown(
-            "### Camera Attendance"
-        )
+        st.subheader("Camera Attendance")
 
         st.caption(
-            "Start the camera to recognize registered students and record attendance."
+            "Start the camera to recognize registered "
+            "students and record attendance."
         )
 
         try:
-
             from smart_attendance import (
-                render_page
-                as render_smart_attendance
+                render_page as render_smart_attendance
             )
 
             render_smart_attendance()
@@ -3184,209 +2191,167 @@ def attendance_page():
                 "Smart Attendance could not be started."
             )
 
-            st.code(
-                str(error)
-            )
+            st.code(str(error))
 
-    # ------------------------------------------------------------
     # MANUAL
-    # ------------------------------------------------------------
-
     with manual_tab:
 
-        st.markdown(
-            "### Manual Attendance"
-        )
+        st.subheader("Manual Attendance")
 
         if students.empty:
 
             st.info(
-                "No students are currently registered."
+                "No approved students are registered."
             )
 
         else:
 
-            student_opts = {
-                f"{row.get('student_id')} — {row.get('name')}":
-                    row
+            student_map = {}
 
-                for _, row
-                in students.iterrows()
-            }
+            for _, row in students.iterrows():
+
+                sid = row.get(
+                    "student_id",
+                    ""
+                )
+
+                name = row.get(
+                    "name",
+                    ""
+                )
+
+                student_map[
+                    f"{sid} — {name}"
+                ] = row
 
             c1, c2 = st.columns(2)
 
             with c1:
-
                 selected = st.selectbox(
                     "Student",
-                    list(
-                        student_opts.keys()
-                    ),
-                    key="man_student_select"
+                    list(student_map.keys()),
+                    key="manual_student"
                 )
 
             with c2:
-
-                status_choice = (
-                    st.selectbox(
-                        "Status",
-                        [
-                            "Present",
-                            "Late",
-                            "Absent",
-                        ],
-                        key="man_status_select"
-                    )
+                status_choice = st.selectbox(
+                    "Status",
+                    [
+                        "Present",
+                        "Late",
+                        "Absent"
+                    ],
+                    key="manual_status"
                 )
 
             if st.button(
                 "Save Attendance",
-                key="save_manual_att_btn",
-                use_container_width=True
+                key="save_manual_attendance"
             ):
 
-                student = (
-                    student_opts[selected]
-                )
+                student = student_map[selected]
 
                 now = datetime.now()
 
-                date = now.strftime(
+                date_value = now.strftime(
                     "%Y-%m-%d"
                 )
 
-                time = now.strftime(
+                time_value = now.strftime(
                     "%H:%M:%S"
+                )
+
+                student_id = str(
+                    student.get(
+                        "student_id",
+                        ""
+                    )
                 )
 
                 record = {
                     "school_id":
                         st.session_state.school_id,
-
                     "student_id":
-                        student.get(
-                            "student_id",
-                            ""
-                        ),
-
+                        student_id,
                     "name":
-                        student.get(
-                            "name",
-                            ""
-                        ),
-
+                        student.get("name", ""),
                     "class_name":
                         student.get(
                             "class_name",
                             ""
                         ),
-
                     "attendance_date":
-                        date,
-
+                        date_value,
                     "attendance_time":
-                        time,
-
+                        time_value,
                     "status":
                         status_choice,
                 }
 
-                if not db:
+                try:
 
-                    st.error(
-                        "Database unavailable."
+                    existing = (
+                        db.table("attendance")
+                        .select("id")
+                        .eq(
+                            "school_id",
+                            st.session_state.school_id
+                        )
+                        .eq(
+                            "student_id",
+                            student_id
+                        )
+                        .eq(
+                            "attendance_date",
+                            date_value
+                        )
+                        .execute()
                     )
 
-                else:
+                    if existing.data:
 
-                    try:
+                        db.table(
+                            "attendance"
+                        ).update({
+                            "name":
+                                record["name"],
+                            "class_name":
+                                record["class_name"],
+                            "attendance_time":
+                                time_value,
+                            "status":
+                                status_choice,
+                        }).eq(
+                            "id",
+                            existing.data[0]["id"]
+                        ).execute()
 
-                        existing = (
-                            db.table(
-                                "attendance"
-                            )
-                            .select("id")
-                            .eq(
-                                "school_id",
-                                st.session_state.school_id
-                            )
-                            .eq(
-                                "student_id",
-                                record[
-                                    "student_id"
-                                ]
-                            )
-                            .eq(
-                                "attendance_date",
-                                date
-                            )
-                            .execute()
-                        )
+                    else:
 
-                        if existing.data:
+                        db.table(
+                            "attendance"
+                        ).insert(
+                            record
+                        ).execute()
 
-                            (
-                                db.table(
-                                    "attendance"
-                                )
-                                .update({
-                                    "name":
-                                        record[
-                                            "name"
-                                        ],
+                    st.success(
+                        f"{record['name']} marked "
+                        f"{status_choice}."
+                    )
 
-                                    "class_name":
-                                        record[
-                                            "class_name"
-                                        ],
+                except Exception as error:
+                    st.error(
+                        f"Could not save attendance: {error}"
+                    )
 
-                                    "attendance_time":
-                                        time,
+    # RECORDS
+    with records_tab:
 
-                                    "status":
-                                        status_choice,
-                                })
-                                .eq(
-                                    "id",
-                                    existing.data[
-                                        0
-                                    ]["id"]
-                                )
-                                .execute()
-                            )
-
-                        else:
-
-                            db.table(
-                                "attendance"
-                            ).insert(
-                                record
-                            ).execute()
-
-                        st.success(
-                            f"{record['name']} marked as {status_choice}."
-                        )
-
-                    except Exception as error:
-
-                        st.error(
-                            f"Could not save attendance: {error}"
-                        )
-
-    # ------------------------------------------------------------
-    # HISTORY
-    # ------------------------------------------------------------
-
-    with history_tab:
-
-        st.markdown(
-            "### Attendance Records"
+        st.subheader(
+            "Attendance Records"
         )
 
-        attendance = (
-            load_attendance()
-        )
+        attendance = load_attendance()
 
         if attendance.empty:
 
@@ -3405,8 +2370,7 @@ def attendance_page():
                     "attendance_time",
                     "status",
                 ]
-                if c
-                in attendance.columns
+                if c in attendance.columns
             ]
 
             st.dataframe(
@@ -3422,64 +2386,26 @@ def attendance_page():
 
 def occupancy_page():
 
-    st.markdown(
-        """
-        <div style="margin-bottom:28px;">
+    st.title("Smart Occupancy")
 
-            <div style="
-                font-size:2rem;
-                font-weight:900;
-            ">
-                Smart Occupancy
-            </div>
-
-            <div style="
-                color:#6b7280;
-                margin-top:5px;
-            ">
-                Monitor classroom occupancy in real time.
-            </div>
-
-        </div>
-        """,
-        unsafe_allow_html=True,
+    st.caption(
+        "Monitor classroom occupancy in real time."
     )
 
-    st.markdown(
-        """
-        <div style="
-            background:#ffffff;
-            border:1px solid #dedede;
-            border-radius:8px;
-            padding:22px;
-            margin-bottom:22px;
-        ">
+    with st.container(border=True):
 
-            <div style="
-                font-size:1.2rem;
-                font-weight:850;
-            ">
-                Live Classroom View
-            </div>
+        st.subheader(
+            "Live Classroom View"
+        )
 
-            <div style="
-                color:#6b7280;
-                margin-top:6px;
-            ">
-                Start the camera to monitor
-                the number of people present.
-            </div>
-
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+        st.write(
+            "Start the camera to monitor "
+            "the number of people present."
+        )
 
     try:
-
         from smart_occupancy import (
-            render_page
-            as render_smart_occupancy
+            render_page as render_smart_occupancy
         )
 
         render_smart_occupancy()
@@ -3490,9 +2416,7 @@ def occupancy_page():
             "Smart Occupancy could not be started."
         )
 
-        st.code(
-            str(error)
-        )
+        st.code(str(error))
 
 
 # ============================================================
@@ -3501,52 +2425,52 @@ def occupancy_page():
 
 def reports_page():
 
-    st.markdown(
-        """
-        <div style="margin-bottom:28px;">
+    st.title("Reports")
 
-            <div style="
-                font-size:2rem;
-                font-weight:900;
-            ">
-                Reports
-            </div>
-
-            <div style="
-                color:#6b7280;
-                margin-top:5px;
-            ">
-                View attendance statistics and records.
-            </div>
-
-        </div>
-        """,
-        unsafe_allow_html=True,
+    st.caption(
+        "View attendance statistics and records."
     )
 
     students = load_students()
     attendance = load_attendance()
 
-    total_records = len(
-        attendance
-    )
+    if (
+        not students.empty
+        and "status" in students.columns
+    ):
+
+        status = (
+            students["status"]
+            .fillna("Active")
+            .astype(str)
+            .str.lower()
+        )
+
+        students = students[
+            ~status.isin(
+                ["pending", "declined"]
+            )
+        ]
+
+    total_records = len(attendance)
 
     present_count = 0
 
     if (
         not attendance.empty
-        and "status"
-        in attendance.columns
+        and "status" in attendance.columns
     ):
 
-        present_count = len(
-            attendance[
+        present_count = int(
+            (
                 attendance["status"]
-                == "Present"
-            ]
+                .astype(str)
+                .str.lower()
+                == "present"
+            ).sum()
         )
 
-    overall_pct = (
+    overall = (
         round(
             (
                 present_count
@@ -3554,66 +2478,38 @@ def reports_page():
             ) * 100,
             1
         )
-        if total_records > 0
+        if total_records
         else 0.0
     )
 
-    m1, m2, m3 = st.columns(3)
+    c1, c2, c3 = st.columns(3)
 
-    with m1:
-
+    with c1:
         st.metric(
             "Total Students",
             len(students)
         )
 
-    with m2:
-
+    with c2:
         st.metric(
             "Attendance Records",
             total_records
         )
 
-    with m3:
-
+    with c3:
         st.metric(
             "Present",
             present_count
         )
 
-    st.markdown(
-        f"""
-        <div style="
-            background:#ffffff;
-            border:1px solid #dedede;
-            border-radius:8px;
-            padding:24px;
-            margin:24px 0;
-        ">
+    with st.container(border=True):
+        st.metric(
+            "Overall Attendance Rate",
+            f"{overall}%"
+        )
 
-            <div style="
-                color:#6b7280;
-                font-size:0.8rem;
-                font-weight:700;
-            ">
-                OVERALL ATTENDANCE RATE
-            </div>
-
-            <div style="
-                font-size:2.4rem;
-                font-weight:900;
-                margin-top:5px;
-            ">
-                {overall_pct}%
-            </div>
-
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.markdown(
-        "### Attendance Records"
+    st.subheader(
+        "Attendance Records"
     )
 
     if attendance.empty:
@@ -3633,8 +2529,7 @@ def reports_page():
                 "attendance_time",
                 "status",
             ]
-            if c
-            in attendance.columns
+            if c in attendance.columns
         ]
 
         st.dataframe(
@@ -3650,105 +2545,59 @@ def reports_page():
 
 def settings_page():
 
-    st.markdown(
-        """
-        <div style="margin-bottom:28px;">
+    st.title("Settings")
 
-            <div style="
-                font-size:2rem;
-                font-weight:900;
-            ">
-                Settings
-            </div>
-
-            <div style="
-                color:#6b7280;
-                margin-top:5px;
-            ">
-                View your school and account information.
-            </div>
-
-        </div>
-        """,
-        unsafe_allow_html=True,
+    st.caption(
+        "View your school and account information."
     )
 
-    st.markdown(
-        "### School Information"
+    st.subheader(
+        "School Information"
     )
 
-    st.markdown(
-        f"""
-        <div style="
-            background:#ffffff;
-            border:1px solid #dedede;
-            border-radius:8px;
-            padding:24px;
-            margin-bottom:28px;
-        ">
+    with st.container(border=True):
 
-            <strong>School</strong>
-            <br>
-            {st.session_state.school_name}
+        st.write(
+            f"**School:** "
+            f"{st.session_state.school_name}"
+        )
 
-            <br><br>
+        st.write(
+            f"**School ID:** "
+            f"{st.session_state.school_id}"
+        )
 
-            <strong>School ID</strong>
-            <br>
-            {st.session_state.school_id}
+        st.write(
+            f"**Role:** "
+            f"{st.session_state.role}"
+        )
 
-            <br><br>
+        account = (
+            st.session_state.user_name
+            or st.session_state.user_id
+        )
 
-            <strong>Role</strong>
-            <br>
-            {st.session_state.role}
+        st.write(
+            f"**Account:** {account}"
+        )
 
-            <br><br>
+    st.subheader("Connection")
 
-            <strong>Account</strong>
-            <br>
-            {
-                st.session_state.user_name
-                or st.session_state.user_id
-            }
+    with st.container(border=True):
 
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+        if db:
+            st.success(
+                "Database Connected"
+            )
+        else:
+            st.error(
+                "Database connection unavailable."
+            )
 
-    st.markdown(
-        "### Connection"
-    )
-
-    connection_status = (
-        "Connected"
-        if db
-        else "Connection unavailable"
-    )
-
-    st.markdown(
-        f"""
-        <div style="
-            background:#ffffff;
-            border:1px solid #dedede;
-            border-radius:8px;
-            padding:22px;
-        ">
-
-            <strong>Database</strong>
-
-            <div style="
-                color:#6b7280;
-                margin-top:5px;
-            ">
-                {connection_status}
-            </div>
-
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+            if db_error_message:
+                st.caption(
+                    db_error_message
+                )
 
 
 # ============================================================
@@ -3757,87 +2606,34 @@ def settings_page():
 
 def school_application():
 
+    if not st.session_state.logged_in:
+        st.session_state.screen = "school_login"
+        st.rerun()
+
     with st.sidebar:
 
-        st.markdown(
-            """
-            <div style="
-                padding:10px 0 18px;
-                border-bottom:1px solid #dedede;
-                margin-bottom:18px;
-            ">
+        st.title("EduVision")
 
-                <div style="
-                    font-size:1.45rem;
-                    font-weight:900;
-                ">
-                    EduVision
-                </div>
+        st.caption("SCHOOL")
 
-            </div>
-            """,
-            unsafe_allow_html=True,
+        st.write(
+            f"**{st.session_state.school_name}**"
         )
 
-        st.markdown(
-            f"""
-            <div style="
-                margin-bottom:18px;
-            ">
+        st.caption("ACCOUNT")
 
-                <div style="
-                    color:#6b7280;
-                    font-size:0.78rem;
-                    font-weight:700;
-                ">
-                    SCHOOL
-                </div>
+        st.write(
+            st.session_state.user_name
+            or st.session_state.user_id
+        )
 
-                <div style="
-                    margin-top:4px;
-                    font-weight:750;
-                ">
-                    {st.session_state.school_name}
-                </div>
-
-                <div style="
-                    color:#6b7280;
-                    font-size:0.78rem;
-                    font-weight:700;
-                    margin-top:18px;
-                ">
-                    ACCOUNT
-                </div>
-
-                <div style="
-                    margin-top:4px;
-                    font-weight:650;
-                ">
-                    {
-                        st.session_state.user_name
-                        or st.session_state.user_id
-                    }
-                </div>
-
-                <div style="
-                    color:#6b7280;
-                    font-size:0.82rem;
-                    margin-top:3px;
-                ">
-                    {st.session_state.role}
-                </div>
-
-            </div>
-            """,
-            unsafe_allow_html=True,
+        st.caption(
+            st.session_state.role
         )
 
         st.divider()
 
-        if (
-            st.session_state.role
-            == "School Admin"
-        ):
+        if st.session_state.role == "School Admin":
 
             pages = [
                 "Dashboard",
@@ -3859,51 +2655,23 @@ def school_application():
                 "Reports",
             ]
 
-        old_nav_names = {
-            "🏠 Dashboard":
-                "Dashboard",
-
-            "🎓 Students":
-                "Students",
-
-            "👨‍🏫 Teachers":
-                "Teachers",
-
-            "📷 Smart Attendance":
-                "Smart Attendance",
-
-            "👥 Smart Occupancy":
-                "Smart Occupancy",
-
-            "📊 Reports":
-                "Reports",
-
-            "⚙️ Settings":
-                "Settings",
-        }
-
-        current_page = (
-            st.session_state.get(
-                "nav_page",
-                "Dashboard"
-            )
+        current = st.session_state.get(
+            "nav_page",
+            "Dashboard"
         )
 
-        current_page = (
-            old_nav_names.get(
-                current_page,
-                current_page
-            )
-        )
+        if current not in pages:
+            current = "Dashboard"
 
-        if current_page not in pages:
-            current_page = "Dashboard"
+        # Important: do not manually overwrite a widget
+        # after it has already been created.
+        if "sidebar_nav_radio" not in st.session_state:
+            st.session_state[
+                "sidebar_nav_radio"
+            ] = current
 
-        # Keep widget state valid.
-        if (
-            "sidebar_nav_radio"
-            in st.session_state
-            and st.session_state[
+        elif (
+            st.session_state[
                 "sidebar_nav_radio"
             ] not in pages
         ):
@@ -3911,13 +2679,9 @@ def school_application():
                 "sidebar_nav_radio"
             ]
 
-        if (
-            "sidebar_nav_radio"
-            not in st.session_state
-        ):
             st.session_state[
                 "sidebar_nav_radio"
-            ] = current_page
+            ] = current
 
         page = st.radio(
             "Navigation",
@@ -3925,29 +2689,20 @@ def school_application():
             key="sidebar_nav_radio"
         )
 
-        st.session_state.nav_page = (
-            page
-        )
+        st.session_state.nav_page = page
 
         st.divider()
 
         if st.button(
             "Log Out",
-            key="sidebar_logout_btn",
-            use_container_width=True
+            key="school_logout"
         ):
 
             clear_login()
-
-            st.session_state.screen = (
-                "school_portal"
-            )
-
+            st.session_state.screen = "school_portal"
             st.rerun()
 
-    # ------------------------------------------------------------
     # ROUTING
-    # ------------------------------------------------------------
 
     if page == "Dashboard":
         dashboard_page()
@@ -3956,17 +2711,7 @@ def school_application():
         students_page()
 
     elif page == "Teachers":
-
-        if (
-            st.session_state.role
-            == "School Admin"
-        ):
-            teachers_page()
-
-        else:
-            st.error(
-                "School Admin access required."
-            )
+        teachers_page()
 
     elif page == "Smart Attendance":
         attendance_page()
@@ -3978,64 +2723,45 @@ def school_application():
         reports_page()
 
     elif page == "Settings":
-
-        if (
-            st.session_state.role
-            == "School Admin"
-        ):
-            settings_page()
-
-        else:
-            st.error(
-                "School Admin access required."
-            )
+        settings_page()
 
 
 # ============================================================
 # MASTER ROUTER
 # ============================================================
 
-current_screen = (
-    st.session_state.get(
-        "screen",
-        "welcome"
-    )
+current_screen = st.session_state.get(
+    "screen",
+    "welcome"
 )
 
 if current_screen == "welcome":
 
     welcome_screen()
 
-
 elif current_screen == "portal":
 
     portal_screen()
-
 
 elif current_screen == "school_portal":
 
     school_portal()
 
-
 elif current_screen == "platform_admin_login":
 
     platform_admin_login()
 
-
 elif (
     current_screen == "platform_admin"
     and st.session_state.logged_in
-    and st.session_state.role
-    == "EduVision Admin"
+    and st.session_state.role == "EduVision Admin"
 ):
 
     platform_admin_page()
 
-
 elif current_screen == "school_login":
 
     school_login()
-
 
 elif (
     current_screen == "school_app"
@@ -4044,11 +2770,7 @@ elif (
 
     school_application()
 
-
 else:
 
-    st.session_state.screen = (
-        "welcome"
-    )
-
+    st.session_state.screen = "welcome"
     st.rerun()
