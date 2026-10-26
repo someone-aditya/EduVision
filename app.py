@@ -727,92 +727,43 @@ def welcome_screen():
 
     st.markdown(
         """
-        <div style="
-            max-width:900px;
-            margin:70px auto 35px;
-            text-align:center;
-            padding:20px;
-        ">
+<div style="max-width:900px; margin:70px auto 35px; text-align:center; padding:20px;">
+    <div style="font-size:0.85rem; font-weight:800; letter-spacing:0.10em; color:#6b7280; margin-bottom:18px;">
+        AI • SMART CLASSROOM
+    </div>
 
-            <div style="
-                font-size:0.85rem;
-                font-weight:800;
-                letter-spacing:0.10em;
-                color:#6b7280;
-                margin-bottom:18px;
-            ">
-                AI • SMART CLASSROOM
-            </div>
+    <div style="font-size:5rem; font-weight:900; letter-spacing:-0.05em; line-height:1; color:#111111; margin-bottom:24px;">
+        EduVision
+    </div>
 
-            <div style="
-                font-size:clamp(3.5rem,9vw,6.5rem);
-                font-weight:950;
-                letter-spacing:-0.065em;
-                line-height:0.95;
-                color:#111111;
-                margin-bottom:24px;
-            ">
-                EduVision
-            </div>
-
-            <div style="
-                max-width:650px;
-                margin:0 auto;
-                color:#6b7280;
-                font-size:1.05rem;
-                line-height:1.7;
-            ">
-                Smarter classrooms through fast attendance,
-                classroom monitoring and simple management.
-            </div>
-
-        </div>
+    <div style="max-width:650px; margin:0 auto; color:#6b7280; font-size:1.05rem; line-height:1.7;">
+        Smarter classrooms through fast attendance, classroom monitoring and simple management.
+    </div>
+</div>
         """,
         unsafe_allow_html=True,
     )
 
-    left, button_col, right = st.columns(
-        [1.3, 1, 1.3]
-    )
+    left, center, right = st.columns([1.3, 1, 1.3])
 
-    with button_col:
-
+    with center:
         if st.button(
             "Enter EduVision →",
             key="enter_eduvision_btn",
-            use_container_width=True
+            use_container_width=True,
         ):
-
             st.session_state.screen = "portal"
-
             st.rerun()
 
     st.markdown(
         """
-        <div style="
-            text-align:center;
-            margin-top:24px;
-            color:#6b7280;
-            font-size:0.82rem;
-            font-weight:650;
-        ">
-
-            <span style="
-                display:inline-block;
-                width:7px;
-                height:7px;
-                border-radius:50%;
-                background:#22c55e;
-                margin-right:7px;
-            "></span>
-
-            System Online
-
-        </div>
+<div style="text-align:center; margin-top:24px; color:#6b7280; font-size:0.82rem; font-weight:650;">
+    <span style="display:inline-block; width:7px; height:7px; border-radius:50%; background:#22c55e; margin-right:7px;"></span>
+    System Online
+</div>
         """,
         unsafe_allow_html=True,
     )
-
 
 # ============================================================
 # PORTAL
@@ -820,27 +771,13 @@ def welcome_screen():
 
 def portal_screen():
 
-    top1, top2 = st.columns(
-        [4, 1]
-    )
+    # TOP BAR
+    title_col, back_col = st.columns([4, 1])
 
-    with top1:
+    with title_col:
+        st.title("EduVision")
 
-        st.markdown(
-            """
-            <div style="
-                font-size:1.5rem;
-                font-weight:900;
-                color:#111111;
-            ">
-                EduVision
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    with top2:
-
+    with back_col:
         if st.button(
             "← Back",
             key="portal_back_welcome",
@@ -848,137 +785,51 @@ def portal_screen():
         ):
             go_welcome()
 
-    st.markdown(
-        """
-        <div style="
-            margin:45px 0 35px;
-        ">
+    st.write("")
+    st.header("Choose your workspace")
+    st.caption("Select how you want to access EduVision.")
 
-            <div style="
-                color:#111111;
-                font-size:clamp(2.2rem,5vw,3.8rem);
-                font-weight:900;
-                letter-spacing:-0.055em;
-            ">
-                Choose your workspace
-            </div>
+    st.write("")
 
-            <div style="
-                color:#6b7280;
-                font-size:1rem;
-                margin-top:10px;
-            ">
-                Select how you want to access EduVision.
-            </div>
+    # TWO PORTALS
+    school_col, admin_col = st.columns(2, gap="large")
 
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    school_col, admin_col = st.columns(
-        2,
-        gap="large"
-    )
-
+    # SCHOOL PORTAL
     with school_col:
 
-        st.markdown(
-            """
-            <div style="
-                background:#ffffff;
-                border:1px solid #dedede;
-                border-radius:8px;
-                padding:32px;
-                min-height:180px;
-            ">
+        with st.container(border=True):
+            st.subheader("School Portal")
 
-                <div style="
-                    font-size:1.4rem;
-                    font-weight:850;
-                    color:#111111;
-                    margin-bottom:12px;
-                ">
-                    School Portal
-                </div>
-
-                <div style="
-                    color:#6b7280;
-                    line-height:1.6;
-                ">
-                    Access your school workspace for
-                    attendance, students and classroom
-                    management.
-                </div>
-
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        st.write("")
+            st.write(
+                "Access your school workspace for attendance, "
+                "students and classroom management."
+            )
 
         if st.button(
             "Open School Portal →",
             key="open_school_portal_btn",
             use_container_width=True
         ):
-
-            st.session_state.screen = (
-                "school_portal"
-            )
-
+            st.session_state.screen = "school_portal"
             st.rerun()
 
+    # EDUVISION ADMIN
     with admin_col:
 
-        st.markdown(
-            """
-            <div style="
-                background:#ffffff;
-                border:1px solid #dedede;
-                border-radius:8px;
-                padding:32px;
-                min-height:180px;
-            ">
+        with st.container(border=True):
+            st.subheader("EduVision Admin")
 
-                <div style="
-                    font-size:1.4rem;
-                    font-weight:850;
-                    color:#111111;
-                    margin-bottom:12px;
-                ">
-                    EduVision Admin
-                </div>
-
-                <div style="
-                    color:#6b7280;
-                    line-height:1.6;
-                ">
-                    Review and manage school
-                    registration requests.
-                </div>
-
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        st.write("")
+            st.write(
+                "Review and manage school registration requests."
+            )
 
         if st.button(
             "Open Admin →",
             key="open_admin_portal_btn",
             use_container_width=True
         ):
-
-            st.session_state.screen = (
-                "platform_admin_login"
-            )
-
+            st.session_state.screen = "platform_admin_login"
             st.rerun()
-
-
 # ============================================================
 # SCHOOL PORTAL
 # ============================================================
