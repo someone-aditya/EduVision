@@ -1,203 +1,209 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>EduVision | AI Smart Classroom</title>
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
-    <link rel="stylesheet" href="/styles.css">
+    <title>EduVision</title>
+
+    <link
+        rel="stylesheet"
+        href="/styles.css"
+    >
 </head>
+
 
 <body>
 
-    <!-- =========================
-         LANDING PAGE
-    ========================== -->
-    <main id="home">
 
-        <section class="hero">
+<!-- =========================================
+     LANDING PAGE
+========================================= -->
 
-            <div class="eyebrow">
-                AI • SMART CLASSROOM
-            </div>
+<main id="home">
 
-            <h1>EduVision</h1>
+    <div class="hero">
 
-            <p>
-                Smarter classrooms through fast attendance,
-                classroom monitoring and simple management.
-            </p>
+        <div class="eyebrow">
+            AI • SMART CLASSROOM
+        </div>
 
-            <div class="hero-actions">
-                <button onclick="showLogin('school')">
-                    School Admin
-                </button>
 
-                <button onclick="showLogin('teacher')">
-                    Teacher
-                </button>
+        <h1>
+            EduVision
+        </h1>
 
-                <button onclick="showLogin('register')">
-                    Register School
-                </button>
-            </div>
 
-            <button
-                class="secondary-btn"
-                onclick="showLogin('eduvision')"
-            >
-                EduVision Admin
+        <p>
+            Smarter classrooms through fast attendance,
+            classroom monitoring and simple management.
+        </p>
+
+
+        <div class="tools">
+
+            <button onclick="login('admin')">
+                School Admin
             </button>
 
-            <div class="system-status">
-                <span>●</span>
-                System Online
-            </div>
 
-        </section>
-
-    </main>
-
-
-    <!-- =========================
-         LOGIN / REGISTRATION
-    ========================== -->
-    <section id="login" class="hidden">
-
-        <div class="login-wrapper">
-
-            <button
-                class="back-btn"
-                onclick="backHome()"
-            >
-                ← Back
+            <button onclick="login('teacher')">
+                Teacher Login
             </button>
 
-            <div class="login-card">
 
-                <div class="eyebrow">
-                    EDUVISION
-                </div>
-
-                <h2 id="login-title">
-                    Login
-                </h2>
-
-                <p id="login-description">
-                    Sign in to continue.
-                </p>
-
-                <div id="login-form"></div>
-
-                <p id="login-message"></p>
-
-            </div>
+            <button onclick="login('register')">
+                Register School
+            </button>
 
         </div>
 
-    </section>
+
+        <button onclick="login('evadmin')">
+            EduVision Admin
+        </button>
 
 
-    <!-- =========================
-         MAIN APPLICATION
-    ========================== -->
-    <section id="app" class="hidden">
+        <p class="muted">
+            ● System Online
+        </p>
 
-        <aside class="sidebar">
+    </div>
 
-            <div>
-
-                <div class="brand">
-                    EduVision
-                </div>
-
-                <div id="user-info" class="user-info">
-                    Loading...
-                </div>
-
-                <nav id="sidebar-nav"></nav>
-
-            </div>
-
-            <button
-                class="logout-btn"
-                onclick="logout()"
-            >
-                Log Out
-            </button>
-
-        </aside>
+</main>
 
 
-        <div class="app-main">
 
-            <header class="topbar">
+<!-- =========================================
+     LOGIN
+========================================= -->
 
-                <div>
+<section
+    id="login"
+    class="hidden"
+>
 
-                    <div class="eyebrow">
-                        AI • SMART CLASSROOM
-                    </div>
+    <div class="card">
 
-                    <h2 id="page-title">
-                        Dashboard
-                    </h2>
-
-                </div>
-
-                <div class="system-online">
-                    <span>●</span>
-                    System Online
-                </div>
-
-            </header>
+        <button onclick="window.location.reload()">
+            ← Back
+        </button>
 
 
-            <div id="page-content"></div>
-
-        </div>
-
-    </section>
+        <h2 id="lt">
+            Login
+        </h2>
 
 
-    <!-- =========================
-         SUPABASE
-    ========================== -->
-
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+        <div id="form"></div>
 
 
-    <!-- =========================
-         FACE RECOGNITION
+        <p id="msg"></p>
 
-         This loads face-api.js in the
-         user's browser.
+    </div>
 
-         It is used for:
-         - face detection
-         - face landmarks
-         - face descriptors
-         - face matching
-    ========================== -->
-
-    <script
-        src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js">
-    </script>
+</section>
 
 
-    <!-- =========================
-         EDUVISION CONFIG
-    ========================== -->
 
-    <script src="/config.js"></script>
+<!-- =========================================
+     APPLICATION
+========================================= -->
+
+<section
+    id="app"
+    class="hidden"
+>
 
 
-    <!-- =========================
-         EDUVISION APPLICATION
-    ========================== -->
+    <!-- SIDEBAR -->
 
-    <script src="/app.js"></script>
+    <aside>
+
+        <h2>
+            EduVision
+        </h2>
+
+
+        <div id="who"></div>
+
+
+        <nav id="nav"></nav>
+
+
+        <button onclick="logout()">
+            Log Out
+        </button>
+
+    </aside>
+
+
+
+    <!-- MAIN AREA -->
+
+    <article>
+
+
+        <small>
+            AI • SMART CLASSROOM
+        </small>
+
+
+        <h1 id="title">
+            Dashboard
+        </h1>
+
+
+        <div id="page"></div>
+
+
+    </article>
+
+
+</section>
+
+
+
+<!-- =========================================
+     SUPABASE
+========================================= -->
+
+<script
+    src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
+</script>
+
+
+
+<!-- =========================================
+     FACE RECOGNITION
+========================================= -->
+
+<script
+    src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js">
+</script>
+
+
+
+<!-- =========================================
+     EDUVISION CONFIG
+========================================= -->
+
+<script src="/config.js"></script>
+
+
+
+<!-- =========================================
+     MAIN APP
+========================================= -->
+
+<script src="/app.js"></script>
+
 
 </body>
+
 </html>
