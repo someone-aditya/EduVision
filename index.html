@@ -1,17 +1,1 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#080d18">
-  <title>EduVision — Smart Classroom</title>
-  <link rel="stylesheet" href="/styles.css">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script defer src="/config.js"></script>
-  <script defer src="/app.js"></script>
-</head>
-<body>
-  <div id="toast" class="toast"></div>
-  <div id="app"></div>
-</body>
-</html>
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>EduVision</title><link rel="stylesheet" href="/styles.css"></head><body><div class="glow"></div><header><b>◉ EduVision</b><span>● System Online</span></header><main id="home"><div class="pill">AI • SMART CLASSROOM</div><h1>Edu<span>Vision</span></h1><p>Smarter classrooms through fast attendance, classroom monitoring and simple management.</p><div class="buttons"><button onclick="login('admin')">School Admin</button><button onclick="login('teacher')">Teacher Login</button><button class="outline" onclick="login('register')">Register School</button></div><a onclick="login('evadmin')">EduVision Admin</a></main><section id="login" class="hidden"><button class="back" onclick="location.reload()">← Back</button><div class="card"><h2 id="lt">Login</h2><div id="form"></div><p id="msg"></p></div></section><section id="app" class="hidden"><aside><h2>◉ EduVision</h2><div id="who"></div><nav id="nav"></nav><button onclick="logout()">Log out</button></aside><article><small>AI • SMART CLASSROOM</small><h1 id="title">Dashboard</h1><div id="page"></div></article></section><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="/config.js"></script><script src="/app.js"></script></body></html>
