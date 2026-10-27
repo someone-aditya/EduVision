@@ -1,15 +1,795 @@
-*{box-sizing:border-box}body{margin:0;background:#060b16;color:#f5f8ff;font-family:Arial,sans-serif;min-height:100vh}.glow{position:fixed;inset:0;background:radial-gradient(circle at 15% 5%,#17336588,transparent 35%),radial-gradient(circle at 85% 10%,#32175255,transparent 30%);pointer-events:none}header{height:76px;padding:0 6%;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #ffffff12;position:relative}header span{color:#65e3a4;font-size:13px}main{position:relative;text-align:center;max-width:900px;margin:auto;padding:14vh 20px}main h1{font-size:clamp(60px,10vw,110px);margin:25px 0 15px;letter-spacing:-7px}main h1 span{color:#59a9ff}main p{color:#93a5c1;font-size:18px;line-height:1.6}.pill{display:inline-block;border:1px solid #31527d;border-radius:99px;padding:8px 13px;color:#9ec8ff;font-size:12px}.buttons{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:32px}button{background:linear-gradient(135deg,#287ce8,#5ac5ff);border:0;border-radius:11px;color:white;padding:12px 18px;font-weight:bold;cursor:pointer}.outline{background:#101a2c;border:1px solid #294269}main a{color:#6e829e;font-size:13px;cursor:pointer}.hidden{display:none!important}#login{position:relative;min-height:100vh}.back{position:absolute;top:25px;left:25px;background:transparent}.card{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(430px,90%);padding:28px;border:1px solid #203250;border-radius:20px;background:#0b1425}.field{margin:12px 0}.field label{display:block;color:#9aabc4;font-size:12px;margin-bottom:6px}.field input{width:100%;padding:12px;border:0;border-radius:9px;background:white;color:#111}.card button{width:100%;margin-top:10px}#msg{color:#ff9cac;font-size:13px}#app{position:relative;display:grid;grid-template-columns:240px 1fr;min-height:100vh}aside{background:#08101e;border-right:1px solid #182641;padding:22px;display:flex;flex-direction:column;gap:16px}#who{color:#90a3c0;padding:12px;background:#0e192b;border-radius:12px}nav{display:grid;gap:6px}nav button{text-align:left;background:transparent;color:#a2b1c7}nav button:hover{background:#13233e}aside>button{margin-top:auto;background:#24121a}article{padding:34px}article>small{color:#6f88aa;letter-spacing:2px}article>h1{font-size:32px}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.box{background:#0c1627;border:1px solid #1d2d49;border-radius:16px;padding:20px}.box b{font-size:30px;display:block;margin-top:8px}.muted{color:#8ea1bd}.table{overflow:auto;background:#0b1424;border:1px solid #1d2d49;border-radius:15px}table{width:100%;border-collapse:collapse;min-width:650px}td,th{padding:12px;text-align:left;border-bottom:1px solid #19263d;font-size:13px}.camera{min-height:350px;background:#030711;border:1px dashed #35557e;border-radius:16px;display:grid;place-items:center;color:#8ba0bd;overflow:hidden}.camera video{width:100%;height:100%;object-fit:cover}.tools{display:flex;gap:9px;flex-wrap:wrap;margin:15px 0}.tools input,.tools select{padding:10px;border-radius:8px;border:0;background:white;color:#111}@media(max-width:800px){#app{grid-template-columns:80px 1fr}aside h2,#who,nav button span{display:none}.stats{grid-template-columns:1fr 1fr}article{padding:20px}}
-/* Make each EduVision screen replace the previous screen */
+/* =========================================================
+   EDUVISION
+   COMPLETE DARK UI
+========================================================= */
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    min-height: 100%;
+    background: #060b16;
+    color: #f5f8ff;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+body {
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+
+/* =========================================================
+   IMPORTANT SCREEN CONTROL
+========================================================= */
+
 .hidden {
     display: none !important;
 }
 
-#login.hidden,
 #home.hidden,
+#login.hidden,
 #app.hidden {
     display: none !important;
 }
 
+
+/* =========================================================
+   BUTTONS
+========================================================= */
+
+button {
+    border: 0;
+    border-radius: 11px;
+
+    padding: 12px 18px;
+
+    color: white;
+
+    font-weight: 700;
+    font-size: 14px;
+
+    cursor: pointer;
+
+    background: linear-gradient(
+        135deg,
+        #287ce8,
+        #5ac5ff
+    );
+
+    transition:
+        transform 0.18s ease,
+        opacity 0.18s ease,
+        box-shadow 0.18s ease;
+}
+
+button:hover {
+    transform: translateY(-1px);
+
+    box-shadow:
+        0 8px 25px
+        rgba(47, 137, 255, 0.25);
+}
+
+button:active {
+    transform: scale(0.98);
+}
+
+
+/* =========================================================
+   LANDING PAGE
+========================================================= */
+
+#home {
+    min-height: 100vh;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 30px;
+
+    text-align: center;
+
+    background:
+        radial-gradient(
+            circle at 20% 10%,
+            rgba(36, 94, 180, 0.25),
+            transparent 35%
+        ),
+        radial-gradient(
+            circle at 80% 15%,
+            rgba(91, 40, 150, 0.15),
+            transparent 30%
+        ),
+        #060b16;
+}
+
+.hero {
+    width: 100%;
+    max-width: 850px;
+
+    margin: auto;
+}
+
+.eyebrow {
+    display: inline-block;
+
+    margin-bottom: 15px;
+
+    padding: 8px 13px;
+
+    border: 1px solid #31527d;
+    border-radius: 999px;
+
+    color: #9ec8ff;
+
+    font-size: 12px;
+    font-weight: 700;
+
+    letter-spacing: 1.5px;
+}
+
+.hero h1 {
+    margin: 10px 0 15px;
+
+    font-size: clamp(
+        60px,
+        10vw,
+        105px
+    );
+
+    line-height: 1;
+
+    letter-spacing: -6px;
+
+    background: linear-gradient(
+        90deg,
+        #ffffff,
+        #77baff
+    );
+
+    -webkit-background-clip: text;
+    background-clip: text;
+
+    color: transparent;
+}
+
+.hero > p {
+    max-width: 680px;
+
+    margin:
+        20px auto 28px;
+
+    color: #93a5c1;
+
+    font-size: 18px;
+    line-height: 1.6;
+}
+
+.hero .tools {
+    justify-content: center;
+}
+
+.hero > button {
+    margin-top: 5px;
+
+    background: #101a2c;
+
+    border: 1px solid #294269;
+}
+
+
+/* =========================================================
+   LOGIN PAGE
+========================================================= */
+
+#login {
+    position: fixed;
+
+    inset: 0;
+
+    z-index: 100;
+
+    width: 100%;
+    min-height: 100vh;
+
+    display: flex;
+
+    align-items: center;
+    justify-content: center;
+
+    padding: 25px;
+
+    background:
+        radial-gradient(
+            circle at 50% 20%,
+            rgba(37, 102, 201, 0.18),
+            transparent 35%
+        ),
+        #060b16;
+}
+
+
+/* LOGIN CARD */
+
+#login .card {
+    position: relative;
+
+    width: min(
+        430px,
+        100%
+    );
+
+    margin: auto;
+
+    padding: 34px;
+
+    background:
+        linear-gradient(
+            145deg,
+            #0d1728,
+            #09111f
+        );
+
+    border: 1px solid #203250;
+
+    border-radius: 22px;
+
+    box-shadow:
+        0 30px 80px
+        rgba(0, 0, 0, 0.45);
+
+    text-align: left;
+}
+
+
+#login .card h2 {
+    margin:
+        18px 0 25px;
+
+    text-align: center;
+
+    font-size: 27px;
+}
+
+
+/* BACK BUTTON */
+
+#login .card > button:first-child {
+    width: auto;
+
+    margin: 0 0 12px;
+
+    padding:
+        8px 12px;
+
+    background: #111d31;
+
+    border:
+        1px solid #243c60;
+
+    color: #a8bdd9;
+}
+
+
+/* =========================================================
+   LOGIN INPUTS
+========================================================= */
+
+.field {
+    margin:
+        0 0 16px;
+}
+
+.field label {
+    display: block;
+
+    margin-bottom: 7px;
+
+    color: #9fb0c8;
+
+    font-size: 12px;
+    font-weight: 700;
+
+    letter-spacing: 0.4px;
+}
+
+.field input {
+    width: 100%;
+
+    height: 46px;
+
+    padding:
+        0 13px;
+
+    border: 1px solid #cad4df;
+
+    border-radius: 10px;
+
+    outline: none;
+
+    background: #ffffff;
+
+    color: #111827;
+
+    font-size: 15px;
+}
+
+.field input:focus {
+    border-color: #4a9fff;
+
+    box-shadow:
+        0 0 0 3px
+        rgba(74, 159, 255, 0.16);
+}
+
+
+/* SIGN IN BUTTON */
+
+#form > button {
+    width: 100%;
+
+    min-height: 46px;
+
+    margin-top: 8px;
+
+    font-size: 15px;
+}
+
+
+/* LOGIN MESSAGE */
+
+#msg {
+    min-height: 18px;
+
+    margin:
+        15px 0 0;
+
+    color: #ff93a3;
+
+    text-align: center;
+
+    font-size: 13px;
+}
+
+
+/* =========================================================
+   MAIN APP
+========================================================= */
+
+#app {
+    min-height: 100vh;
+
+    background: #060b16;
+}
+
 #app:not(.hidden) {
+    display: grid !important;
+
+    grid-template-columns:
+        245px minmax(0, 1fr);
+}
+
+
+/* =========================================================
+   SIDEBAR
+========================================================= */
+
+aside {
+    min-height: 100vh;
+
+    position: sticky;
+
+    top: 0;
+
+    padding: 25px 20px;
+
+    background:
+        linear-gradient(
+            180deg,
+            #08111f,
+            #070d18
+        );
+
+    border-right:
+        1px solid #192943;
+
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 17px;
+}
+
+aside h2 {
+    margin:
+        3px 0 8px;
+
+    font-size: 23px;
+
+    color: #ffffff;
+}
+
+#who {
+    padding: 13px;
+
+    border:
+        1px solid #1c3150;
+
+    border-radius: 12px;
+
+    background: #0d192a;
+
+    color: #91a5c3;
+
+    font-size: 13px;
+
+    line-height: 1.6;
+}
+
+#who b {
+    color: white;
+
+    font-size: 14px;
+}
+
+
+/* =========================================================
+   NAVIGATION
+========================================================= */
+
+nav {
     display: grid;
+
+    gap: 6px;
+}
+
+nav button {
+    width: 100%;
+
+    text-align: left;
+
+    background: transparent;
+
+    color: #a5b5ca;
+
+    box-shadow: none;
+}
+
+nav button:hover {
+    background: #12223a;
+
+    color: white;
+
+    box-shadow: none;
+}
+
+aside > button {
+    margin-top: auto;
+
+    background: #24121a;
+
+    border:
+        1px solid #492331;
+
+    color: #ff9cad;
+}
+
+
+/* =========================================================
+   APP CONTENT
+========================================================= */
+
+article {
+    min-width: 0;
+
+    padding:
+        38px 40px;
+}
+
+article > small {
+    color: #6683a8;
+
+    letter-spacing: 2px;
+
+    font-weight: 700;
+}
+
+article > h1 {
+    margin:
+        7px 0 28px;
+
+    font-size: 34px;
+}
+
+
+/* =========================================================
+   DASHBOARD STATS
+========================================================= */
+
+.stats {
+    display: grid;
+
+    grid-template-columns:
+        repeat(
+            4,
+            minmax(0, 1fr)
+        );
+
+    gap: 15px;
+}
+
+.box {
+    padding: 20px;
+
+    background:
+        linear-gradient(
+            145deg,
+            #0d182a,
+            #0a1322
+        );
+
+    border:
+        1px solid #1c2e4a;
+
+    border-radius: 16px;
+
+    box-shadow:
+        0 10px 35px
+        rgba(0, 0, 0, 0.12);
+}
+
+.box b {
+    display: block;
+
+    margin-top: 8px;
+
+    font-size: 27px;
+}
+
+.muted {
+    color: #8fa3bf;
+}
+
+
+/* =========================================================
+   TOOLS / INPUTS
+========================================================= */
+
+.tools {
+    display: flex;
+
+    align-items: center;
+
+    gap: 10px;
+
+    flex-wrap: wrap;
+
+    margin:
+        15px 0;
+}
+
+.tools input,
+.tools select {
+    min-height: 42px;
+
+    padding:
+        10px 12px;
+
+    border: 1px solid #d0d9e4;
+
+    border-radius: 9px;
+
+    outline: none;
+
+    background: white;
+
+    color: #111827;
+}
+
+
+/* =========================================================
+   TABLES
+========================================================= */
+
+.table {
+    width: 100%;
+
+    overflow-x: auto;
+
+    background: #0a1424;
+
+    border:
+        1px solid #1c2e49;
+
+    border-radius: 16px;
+}
+
+table {
+    width: 100%;
+
+    min-width: 700px;
+
+    border-collapse: collapse;
+}
+
+th,
+td {
+    padding:
+        14px 13px;
+
+    text-align: left;
+
+    border-bottom:
+        1px solid #192840;
+
+    font-size: 13px;
+}
+
+th {
+    color: #8198b8;
+
+    font-size: 11px;
+
+    text-transform: uppercase;
+
+    letter-spacing: 0.8px;
+}
+
+td {
+    color: #d9e2ef;
+}
+
+tr:last-child td {
+    border-bottom: 0;
+}
+
+
+/* =========================================================
+   CAMERA
+========================================================= */
+
+.camera {
+    position: relative;
+
+    width: 100%;
+
+    min-height: 400px;
+
+    overflow: hidden;
+
+    display: grid;
+
+    place-items: center;
+
+    background:
+        radial-gradient(
+            circle at center,
+            #0a1527,
+            #02050a
+        );
+
+    border:
+        1px solid #29476f;
+
+    border-radius: 17px;
+
+    color: #8097b7;
+}
+
+.camera video {
+    width: 100%;
+    height: 100%;
+
+    min-height: 400px;
+
+    display: block;
+
+    object-fit: cover;
+}
+
+.camera canvas {
+    position: absolute;
+
+    inset: 0;
+
+    width: 100%;
+    height: 100%;
+
+    pointer-events: none;
+
+    z-index: 5;
+}
+
+
+/* =========================================================
+   SMART ATTENDANCE
+========================================================= */
+
+#faceStatus {
+    margin-top: 14px;
+
+    text-align: center;
+
+    line-height: 1.7;
+}
+
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media (
+    max-width: 900px
+) {
+
+    .stats {
+        grid-template-columns:
+            repeat(
+                2,
+                minmax(0, 1fr)
+            );
+    }
+
+}
+
+
+@media (
+    max-width: 700px
+) {
+
+    #app:not(.hidden) {
+        grid-template-columns:
+            80px minmax(0, 1fr);
+    }
+
+    aside {
+        padding:
+            20px 10px;
+    }
+
+    aside h2,
+    #who,
+    nav button span {
+        display: none;
+    }
+
+    nav button {
+        min-height: 44px;
+
+        padding:
+            10px 6px;
+    }
+
+    article {
+        padding:
+            25px 17px;
+    }
+
+    .stats {
+        grid-template-columns:
+            1fr;
+    }
+
+    .camera,
+    .camera video {
+        min-height: 300px;
+    }
+
+    #login {
+        padding: 15px;
+    }
+
+    #login .card {
+        padding: 25px 20px;
+    }
+
+    .hero h1 {
+        letter-spacing: -4px;
+    }
+
 }
