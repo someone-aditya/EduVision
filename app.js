@@ -1,14 +1,12 @@
-/* =========================================================
-   EDUVISION
-   COMPLETE APP.JS
-========================================================= */
-
 const C = window.EDUVISION_CONFIG || {};
 
-const db =
+const ok =
     C.SUPABASE_URL &&
     C.SUPABASE_ANON_KEY &&
-    window.supabase
+    !C.SUPABASE_URL.includes("PASTE_");
+
+const db =
+    ok && window.supabase
         ? window.supabase.createClient(
             C.SUPABASE_URL,
             C.SUPABASE_ANON_KEY
@@ -23,12 +21,12 @@ let S = JSON.parse(
 
 
 /* =========================================================
-   GLOBAL AI / CAMERA VARIABLES
+   GLOBAL VARIABLES
 ========================================================= */
 
+let faceModelsReady = false;
 let cameraStream = null;
 
-let faceModelsReady = false;
 let attendanceTimer = null;
 let attendanceBusy = false;
 
@@ -47,29 +45,41 @@ const FACE_MODEL_URL =
 ========================================================= */
 
 function safe(value) {
-    return String(value ?? "").replace(
-        /[&<>"']/g,
-        c => ({
-            "&": "&amp;",
-            "<": "&lt;",
-            ">": "&gt;",
-            '"': "&quot;",
-            "'": "&#39;"
-        }[c])
-    );
+
+    return String(value ?? "")
+        .replace(
+            /[&<>"']/g,
+            char => ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+                "'": "&#39;"
+            }[char])
+        );
 }
 
 
-function field(label, name, type = "text") {
+function field(
+    label,
+    name,
+    type = "text"
+) {
+
     return `
         <div class="field">
-            <label>${label}</label>
+
+            <label>
+                ${safe(label)}
+            </label>
+
             <input
-                name="${name}"
-                type="${type}"
-                autocomplete="off"
                 required
+                name="${safe(name)}"
+                type="${safe(type)}"
+                autocomplete="off"
             >
+
         </div>
     `;
 }
@@ -77,13 +87,21 @@ function field(label, name, type = "text") {
 
 async function hash(text) {
 
-    const data = await crypto.subtle.digest(
-        "SHA-256",
-        new TextEncoder().encode(text)
-    );
+    const data =
+        await crypto.subtle.digest(
+            "SHA-256",
+            new TextEncoder().encode(text)
+        );
 
-    return [...new Uint8Array(data)]
-        .map(x => x.toString(16).padStart(2, "0"))
+    return [
+        ...new Uint8Array(data)
+    ]
+        .map(
+            value =>
+                value
+                    .toString(16)
+                    .padStart(2, "0")
+        )
         .join("");
 }
 
@@ -97,16 +115,17 @@ function values() {
     }
 
     return Object.fromEntries(
-        [...form.querySelectorAll("input")]
-            .map(input => [
-                input.name,
-                input.value.trim()
-            ])
+        [
+            ...form.querySelectorAll("input")
+        ].map(input => [
+            input.name,
+            input.value.trim()
+        ])
     );
 }
 
 
-function message(text) {
+function message(text = "") {
 
     const element = $("#msg");
 
@@ -116,55 +135,561 @@ function message(text) {
 }
 
 
-function showDatabaseError(error) {
+function localDate(
+    date = new Date()
+) {
 
-    console.error(error);
+    const year =
+        date.getFullYear();
 
-    const page = $("#page");
+    const month =
+        String(
+            date.getMonth() + 1
+        ).padStart(2, "0");
 
-    if (!page) {
-        return;
-    }
+    const day =
+        String(
+            date.getDate()
+        ).padStart(2, "0");
 
-    page.innerHTML = `
-        <div class="box">
+    return `${year}-${month}-${day}`;
+}
 
-            <h3>
-                Could not load data
-            </h3>
 
-            <p class="muted">
-                ${safe(
-                    error?.message ||
-                    "Please check the database connection and try again."
-                )}
-            </p>
+function stats(rows = []) {
 
-            <button onclick="page('Dashboard')">
-                Back to Dashboard
-            </button>
+    return `
+
+        <div class="stats">
+
+            ${rows.map(
+                ([label, value]) => `
+
+                    <div class="box">
+
+                        <span class="muted">
+                            ${safe(label)}
+                        </span>
+
+                        <b>
+                            ${safe(value)}
+                        </b>
+
+                    </div>
+
+                `
+            ).join("")}
 
         </div>
+
     `;
 }
 
 
 /* =========================================================
-   HOME
+   SCREEN CONTROL
 ========================================================= */
+
+function showView(name) {
+
+    const views = {
+
+        home:
+            $("#home"),
+
+        selection:
+            $("#selection"),
+
+        login:
+            $("#login"),
+
+        app:
+            $("#app")
+    };
+
+
+    Object.entries(views)
+        .forEach(
+            ([key, element]) => {
+
+                if (!element) {
+                    return;
+                }
+
+
+                if (key === name) {
+
+                    element.classList.remove(
+                        "hidden"
+                    );
+
+                    element.style.display =
+                        key === "app"
+                            ? "grid"
+                            : "flex";
+
+                }
+
+                else {
+
+                    element.classList.add(
+                        "hidden"
+                    );
+
+                    element.style.display =
+                        "none";
+                }
+            }
+        );
+}
+
+
+function showSelection() {
+
+    stopCamera();
+
+    showView(
+        "selection"
+    );
+}
+
 
 function goHome() {
 
     stopCamera();
 
-    $("#login").classList.add("hidden");
-    $("#app").classList.add("hidden");
+    showView(
+        "home"
+    );
+}
 
-    $("#home").classList.remove("hidden");
 
-    $("#home").style.display = "";
-    $("#login").style.display = "none";
-    $("#app").style.display = "none";
+/* =========================================================
+   TOAST NOTIFICATIONS
+========================================================= */
+
+function initUiLayer() {
+
+    if (
+        document.getElementById(
+            "toastContainer"
+        )
+    ) {
+        return;
+    }
+
+
+    const container =
+        document.createElement(
+            "div"
+        );
+
+
+    container.id =
+        "toastContainer";
+
+    container.className =
+        "toast-container";
+
+    container.setAttribute(
+        "aria-live",
+        "polite"
+    );
+
+
+    document.body.appendChild(
+        container
+    );
+}
+
+
+function showToast(
+    text,
+    type = "success"
+) {
+
+    if (!text) {
+        return;
+    }
+
+
+    initUiLayer();
+
+
+    const toast =
+        document.createElement(
+            "div"
+        );
+
+
+    toast.className =
+        `toast ${type}`;
+
+    toast.textContent =
+        text;
+
+
+    document
+        .getElementById(
+            "toastContainer"
+        )
+        .appendChild(
+            toast
+        );
+
+
+    requestAnimationFrame(
+        () =>
+            toast.classList.add(
+                "show"
+            )
+    );
+
+
+    setTimeout(
+        () => {
+
+            toast.classList.remove(
+                "show"
+            );
+
+
+            setTimeout(
+                () =>
+                    toast.remove(),
+                220
+            );
+
+        },
+
+        2800
+    );
+}
+
+
+/* =========================================================
+   LOADING / EMPTY UI
+========================================================= */
+
+function renderLoading(
+    label = "Loading data"
+) {
+
+    return `
+
+        <div class="loading-shell">
+
+            <div class="loading-label">
+                ${safe(label)}
+            </div>
+
+            <div class="loading-skeleton">
+
+                <div class="loading-line"></div>
+
+                <div class="loading-line short"></div>
+
+                <div class="loading-line"></div>
+
+                <div class="loading-line short"></div>
+
+            </div>
+
+        </div>
+
+    `;
+}
+
+
+function emptyState(
+    title,
+    description
+) {
+
+    return `
+
+        <div class="empty-state">
+
+            <div class="empty-state-icon">
+                ○
+            </div>
+
+            <h4>
+                ${safe(title)}
+            </h4>
+
+            <p>
+                ${safe(description)}
+            </p>
+
+        </div>
+
+    `;
+}
+
+
+/* =========================================================
+   SEARCH
+========================================================= */
+
+function renderSearchBar(
+    id,
+    placeholder
+) {
+
+    return `
+
+        <div class="tools search-bar">
+
+            <input
+                id="${safe(id)}"
+                class="table-search"
+                type="search"
+                placeholder="${safe(placeholder)}"
+            >
+
+        </div>
+
+    `;
+}
+
+
+function bindSimpleSearch(
+    inputId,
+    tableSelector
+) {
+
+    const input =
+        document.getElementById(
+            inputId
+        );
+
+    const table =
+        document.querySelector(
+            tableSelector
+        );
+
+
+    if (
+        !input ||
+        !table
+    ) {
+        return;
+    }
+
+
+    input.addEventListener(
+        "input",
+
+        () => {
+
+            const query =
+                input.value
+                    .trim()
+                    .toLowerCase();
+
+
+            table
+                .querySelectorAll(
+                    "tr[data-search-item]"
+                )
+                .forEach(
+                    row => {
+
+                        const text =
+                            row.textContent
+                                .toLowerCase();
+
+
+                        row.style.display =
+                            !query ||
+                            text.includes(query)
+
+                                ? ""
+
+                                : "none";
+                    }
+                );
+        }
+    );
+}
+
+
+/* =========================================================
+   CSV EXPORT
+========================================================= */
+
+function exportCsvRows(
+    rows,
+    filename = "attendance.csv"
+) {
+
+    if (
+        !Array.isArray(rows) ||
+        rows.length === 0
+    ) {
+
+        showToast(
+            "No data to export.",
+            "error"
+        );
+
+        return;
+    }
+
+
+    const headers =
+        Object.keys(
+            rows[0]
+        );
+
+
+    const csv = [
+
+        headers.join(","),
+
+        ...rows.map(
+            row =>
+
+                headers
+                    .map(
+                        header => {
+
+                            const value =
+                                String(
+                                    row[header] ??
+                                    ""
+                                )
+                                    .replace(
+                                        /"/g,
+                                        '""'
+                                    );
+
+
+                            return `"${value}"`;
+                        }
+                    )
+                    .join(",")
+        )
+
+    ].join("\n");
+
+
+    const blob =
+        new Blob(
+            [csv],
+            {
+                type:
+                    "text/csv;charset=utf-8"
+            }
+        );
+
+
+    const url =
+        URL.createObjectURL(
+            blob
+        );
+
+
+    const link =
+        document.createElement(
+            "a"
+        );
+
+
+    link.href =
+        url;
+
+    link.download =
+        filename;
+
+
+    document.body.appendChild(
+        link
+    );
+
+
+    link.click();
+
+    link.remove();
+
+
+    URL.revokeObjectURL(
+        url
+    );
+
+
+    showToast(
+        "CSV export started.",
+        "success"
+    );
+}
+
+
+/* =========================================================
+   DATABASE ERROR
+========================================================= */
+
+function showDatabaseError(
+    error
+) {
+
+    console.error(
+        error
+    );
+
+
+    const pageElement =
+        $("#page");
+
+
+    if (!pageElement) {
+        return;
+    }
+
+
+    pageElement.innerHTML = `
+
+        <div class="box">
+
+            <div class="inline-status error">
+
+                <span class="inline-status-icon">
+                    !
+                </span>
+
+                <span>
+                    Could not load this page.
+                </span>
+
+            </div>
+
+
+            <h3>
+                Database Error
+            </h3>
+
+
+            <p class="muted">
+
+                ${safe(
+                    error?.message ||
+                    "Please check the database connection."
+                )}
+
+            </p>
+
+
+            <button
+                class="no-zoom"
+                onclick="page('Dashboard')"
+            >
+                Back to Dashboard
+            </button>
+
+        </div>
+
+    `;
 }
 
 
@@ -176,106 +701,215 @@ function login(mode) {
 
     stopCamera();
 
-    $("#home").classList.add("hidden");
-    $("#home").style.display = "none";
+    showView(
+        "login"
+    );
 
-    $("#app").classList.add("hidden");
-    $("#app").style.display = "none";
 
-    $("#login").classList.remove("hidden");
-    $("#login").style.display = "flex";
+    const form =
+        $("#form");
 
-    const form = $("#form");
 
     message("");
 
 
-    /* SCHOOL ADMIN */
+    /* -------------------------
+       SCHOOL ADMIN
+    ------------------------- */
 
-    if (mode === "admin") {
+    if (
+        mode === "admin"
+    ) {
 
         $("#lt").textContent =
             "School Admin Login";
 
-        form.innerHTML =
-            field("School ID", "school") +
-            field("Admin ID", "id") +
-            field("Password", "pw", "password") +
-            `<button id="loginButton">
-                Sign In
-            </button>`;
 
-        $("#loginButton").onclick =
+        form.innerHTML =
+
+            field(
+                "School ID",
+                "school"
+            ) +
+
+            field(
+                "Admin ID",
+                "id"
+            ) +
+
+            field(
+                "Password",
+                "pw",
+                "password"
+            ) +
+
+            `
+
+            <button
+                id="loginButton"
+                type="button"
+            >
+                Sign In
+            </button>
+
+            `;
+
+
+        $("#loginButton")
+            .onclick =
             schoolAdminLogin;
+
 
         return;
     }
 
 
-    /* TEACHER */
+    /* -------------------------
+       TEACHER
+    ------------------------- */
 
-    if (mode === "teacher") {
+    if (
+        mode === "teacher"
+    ) {
 
         $("#lt").textContent =
             "Teacher Login";
 
-        form.innerHTML =
-            field("School ID", "school") +
-            field("Teacher ID", "id") +
-            field("Password", "pw", "password") +
-            `<button id="loginButton">
-                Sign In
-            </button>`;
 
-        $("#loginButton").onclick =
+        form.innerHTML =
+
+            field(
+                "School ID",
+                "school"
+            ) +
+
+            field(
+                "Teacher ID",
+                "id"
+            ) +
+
+            field(
+                "Password",
+                "pw",
+                "password"
+            ) +
+
+            `
+
+            <button
+                id="loginButton"
+                type="button"
+            >
+                Sign In
+            </button>
+
+            `;
+
+
+        $("#loginButton")
+            .onclick =
             teacherLogin;
+
 
         return;
     }
 
 
-    /* EDUVISION ADMIN */
+    /* -------------------------
+       EDUVISION ADMIN
+    ------------------------- */
 
-    if (mode === "evadmin") {
+    if (
+        mode === "evadmin"
+    ) {
 
         $("#lt").textContent =
             "EduVision Admin";
 
+
         form.innerHTML =
-            field("Admin ID", "admin_id") +
+
+            field(
+                "Admin ID",
+                "admin_id"
+            ) +
+
             field(
                 "Password",
                 "password",
                 "password"
             ) +
-            `<button id="loginButton">
-                Sign In
-            </button>`;
 
-        $("#loginButton").onclick =
+            `
+
+            <button
+                id="loginButton"
+                type="button"
+            >
+                Sign In
+            </button>
+
+            `;
+
+
+        $("#loginButton")
+            .onclick =
             eduvisionAdminLogin;
+
 
         return;
     }
 
 
-    /* REGISTER SCHOOL */
+    /* -------------------------
+       REGISTER SCHOOL
+    ------------------------- */
 
-    if (mode === "register") {
+    if (
+        mode === "register"
+    ) {
 
         $("#lt").textContent =
             "Register School";
 
-        form.innerHTML =
-            field("School Name", "name") +
-            field("School ID", "school") +
-            field("Admin ID", "id") +
-            field("Password", "pw", "password") +
-            `<button id="loginButton">
-                Register School
-            </button>`;
 
-        $("#loginButton").onclick =
+        form.innerHTML =
+
+            field(
+                "School Name",
+                "name"
+            ) +
+
+            field(
+                "School ID",
+                "school"
+            ) +
+
+            field(
+                "Admin ID",
+                "id"
+            ) +
+
+            field(
+                "Password",
+                "pw",
+                "password"
+            ) +
+
+            `
+
+            <button
+                id="loginButton"
+                type="button"
+            >
+                Register School
+            </button>
+
+            `;
+
+
+        $("#loginButton")
+            .onclick =
             registerSchool;
     }
 }
@@ -288,51 +922,75 @@ function login(mode) {
 async function schoolAdminLogin() {
 
     if (!db) {
-        return message(
+
+        message(
             "Database connection is not configured."
         );
+
+        return;
     }
 
-    const button = $("#loginButton");
+
+    const button =
+        $("#loginButton");
+
 
     try {
 
-        button.disabled = true;
-        button.textContent = "Signing In...";
+        button.disabled =
+            true;
+
+        button.textContent =
+            "Signing In...";
+
 
         message("");
 
-        const a = values();
+
+        const input =
+            values();
+
 
         if (
-            !a.school ||
-            !a.id ||
-            !a.pw
+            !input.school ||
+            !input.id ||
+            !input.pw
         ) {
 
-            message("Please fill in all fields.");
+            message(
+                "Please fill in all fields."
+            );
 
             return;
         }
 
 
-        const result = await db
-            .from("schools")
-            .select("*")
-            .eq("school_id", a.school)
-            .eq("admin_id", a.id)
-            .maybeSingle();
+        const {
+            data,
+            error
+        } =
+            await db
+                .from(
+                    "schools"
+                )
+                .select("*")
+                .eq(
+                    "school_id",
+                    input.school
+                )
+                .eq(
+                    "admin_id",
+                    input.id
+                )
+                .maybeSingle();
 
 
-        if (result.error) {
-            throw result.error;
+        if (error) {
+            throw error;
         }
 
 
-        const school = result.data;
-
-
-        if (!school) {
+        if (!data) {
 
             message(
                 "School ID or Admin ID is incorrect."
@@ -343,7 +1001,7 @@ async function schoolAdminLogin() {
 
 
         if (
-            school.approval_status !==
+            data.approval_status !==
             "Approved"
         ) {
 
@@ -355,36 +1013,52 @@ async function schoolAdminLogin() {
         }
 
 
-        const enteredPassword =
-            await hash(a.pw);
+        const password =
+            await hash(
+                input.pw
+            );
 
 
         if (
-            enteredPassword !==
-            school.admin_password_hash
+            password !==
+            data.admin_password_hash
         ) {
 
-            message("Incorrect password.");
+            message(
+                "Incorrect password."
+            );
 
             return;
         }
 
 
         loginSuccess({
-            role: "School Admin",
-            school: school.school_id,
-            name: school.school_name
+
+            role:
+                "School Admin",
+
+            school:
+                data.school_id,
+
+            name:
+                data.school_name
         });
 
     }
 
     catch (error) {
 
-        console.error(error);
+        console.error(
+            error
+        );
+
 
         message(
             "Login failed: " +
-            (error.message || "Database error")
+            (
+                error?.message ||
+                "Database error"
+            )
         );
 
     }
@@ -392,8 +1066,12 @@ async function schoolAdminLogin() {
     finally {
 
         if (button) {
-            button.disabled = false;
-            button.textContent = "Sign In";
+
+            button.disabled =
+                false;
+
+            button.textContent =
+                "Sign In";
         }
     }
 }
@@ -406,50 +1084,75 @@ async function schoolAdminLogin() {
 async function teacherLogin() {
 
     if (!db) {
-        return message(
+
+        message(
             "Database connection is not configured."
         );
+
+        return;
     }
 
-    const button = $("#loginButton");
+
+    const button =
+        $("#loginButton");
+
 
     try {
 
-        button.disabled = true;
-        button.textContent = "Signing In...";
+        button.disabled =
+            true;
 
-        const a = values();
+        button.textContent =
+            "Signing In...";
+
+
+        message("");
+
+
+        const input =
+            values();
 
 
         if (
-            !a.school ||
-            !a.id ||
-            !a.pw
+            !input.school ||
+            !input.id ||
+            !input.pw
         ) {
 
-            message("Please fill in all fields.");
+            message(
+                "Please fill in all fields."
+            );
 
             return;
         }
 
 
-        const result = await db
-            .from("teachers")
-            .select("*")
-            .eq("school_id", a.school)
-            .eq("teacher_id", a.id)
-            .maybeSingle();
+        const {
+            data,
+            error
+        } =
+            await db
+                .from(
+                    "teachers"
+                )
+                .select("*")
+                .eq(
+                    "school_id",
+                    input.school
+                )
+                .eq(
+                    "teacher_id",
+                    input.id
+                )
+                .maybeSingle();
 
 
-        if (result.error) {
-            throw result.error;
+        if (error) {
+            throw error;
         }
 
 
-        const teacher = result.data;
-
-
-        if (!teacher) {
+        if (!data) {
 
             message(
                 "Teacher account not found."
@@ -459,7 +1162,9 @@ async function teacherLogin() {
         }
 
 
-        if (!teacher.enabled) {
+        if (
+            data.enabled === false
+        ) {
 
             message(
                 "This teacher account is disabled."
@@ -470,31 +1175,47 @@ async function teacherLogin() {
 
 
         if (
-            await hash(a.pw) !==
-            teacher.password_hash
+            await hash(
+                input.pw
+            ) !==
+            data.password_hash
         ) {
 
-            message("Incorrect password.");
+            message(
+                "Incorrect password."
+            );
 
             return;
         }
 
 
         loginSuccess({
-            role: "Teacher",
-            school: teacher.school_id,
-            name: teacher.teacher_name
+
+            role:
+                "Teacher",
+
+            school:
+                data.school_id,
+
+            name:
+                data.teacher_name
         });
 
     }
 
     catch (error) {
 
-        console.error(error);
+        console.error(
+            error
+        );
+
 
         message(
             "Teacher login failed: " +
-            (error.message || "Database error")
+            (
+                error?.message ||
+                "Database error"
+            )
         );
 
     }
@@ -502,8 +1223,12 @@ async function teacherLogin() {
     finally {
 
         if (button) {
-            button.disabled = false;
-            button.textContent = "Sign In";
+
+            button.disabled =
+                false;
+
+            button.textContent =
+                "Sign In";
         }
     }
 }
@@ -515,34 +1240,64 @@ async function teacherLogin() {
 
 async function eduvisionAdminLogin() {
 
-    const button = $("#loginButton");
+    const button =
+        $("#loginButton");
+
 
     try {
 
-        button.disabled = true;
-        button.textContent = "Signing In...";
+        button.disabled =
+            true;
+
+        button.textContent =
+            "Signing In...";
+
 
         message("");
 
-        const a = values();
+
+        const input =
+            values();
 
 
-        const response = await fetch(
-            "/api/admin-login",
-            {
-                method: "POST",
+        if (
+            !input.admin_id ||
+            !input.password
+        ) {
 
-                headers: {
-                    "Content-Type":
-                        "application/json"
-                },
+            message(
+                "Please fill in all fields."
+            );
 
-                body: JSON.stringify({
-                    admin_id: a.admin_id,
-                    password: a.password
-                })
-            }
-        );
+            return;
+        }
+
+
+        const response =
+            await fetch(
+
+                "/api/admin-login",
+
+                {
+                    method:
+                        "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body:
+                        JSON.stringify({
+
+                            admin_id:
+                                input.admin_id,
+
+                            password:
+                                input.password
+                        })
+                }
+            );
 
 
         if (!response.ok) {
@@ -556,15 +1311,22 @@ async function eduvisionAdminLogin() {
 
 
         loginSuccess({
-            role: "EduVision Admin",
-            name: "EduVision Admin"
+
+            role:
+                "EduVision Admin",
+
+            name:
+                "EduVision Admin"
         });
 
     }
 
     catch (error) {
 
-        console.error(error);
+        console.error(
+            error
+        );
+
 
         message(
             "Could not connect to EduVision."
@@ -575,8 +1337,12 @@ async function eduvisionAdminLogin() {
     finally {
 
         if (button) {
-            button.disabled = false;
-            button.textContent = "Sign In";
+
+            button.disabled =
+                false;
+
+            button.textContent =
+                "Sign In";
         }
     }
 }
@@ -589,26 +1355,40 @@ async function eduvisionAdminLogin() {
 async function registerSchool() {
 
     if (!db) {
-        return message(
+
+        message(
             "Database connection is not configured."
         );
+
+        return;
     }
 
-    const button = $("#loginButton");
+
+    const button =
+        $("#loginButton");
+
 
     try {
 
-        button.disabled = true;
-        button.textContent = "Submitting...";
+        button.disabled =
+            true;
 
-        const a = values();
+        button.textContent =
+            "Submitting...";
+
+
+        message("");
+
+
+        const input =
+            values();
 
 
         if (
-            !a.name ||
-            !a.school ||
-            !a.id ||
-            !a.pw
+            !input.name ||
+            !input.school ||
+            !input.id ||
+            !input.pw
         ) {
 
             message(
@@ -619,19 +1399,69 @@ async function registerSchool() {
         }
 
 
-        const result = await db
-            .from("schools")
-            .insert({
-                school_name: a.name,
-                school_id: a.school,
-                admin_id: a.id,
-                admin_password_hash:
-                    await hash(a.pw),
-                approval_status: "Pending"
-            });
+        const duplicate =
+            await db
+                .from(
+                    "schools"
+                )
+                .select(
+                    "school_id"
+                )
+                .eq(
+                    "school_id",
+                    input.school
+                )
+                .maybeSingle();
 
 
-        if (result.error) {
+        if (
+            duplicate.error
+        ) {
+            throw duplicate.error;
+        }
+
+
+        if (
+            duplicate.data
+        ) {
+
+            message(
+                "That School ID is already registered."
+            );
+
+            return;
+        }
+
+
+        const result =
+            await db
+                .from(
+                    "schools"
+                )
+                .insert({
+
+                    school_name:
+                        input.name,
+
+                    school_id:
+                        input.school,
+
+                    admin_id:
+                        input.id,
+
+                    admin_password_hash:
+                        await hash(
+                            input.pw
+                        ),
+
+                    approval_status:
+                        "Pending"
+                });
+
+
+        if (
+            result.error
+        ) {
             throw result.error;
         }
 
@@ -640,14 +1470,23 @@ async function registerSchool() {
             "Registration submitted. Wait for EduVision Admin approval."
         );
 
+
+        showToast(
+            "School registration submitted.",
+            "success"
+        );
+
     }
 
     catch (error) {
 
-        console.error(error);
+        console.error(
+            error
+        );
+
 
         message(
-            error.message ||
+            error?.message ||
             "Registration failed."
         );
 
@@ -656,7 +1495,10 @@ async function registerSchool() {
     finally {
 
         if (button) {
-            button.disabled = false;
+
+            button.disabled =
+                false;
+
             button.textContent =
                 "Register School";
         }
@@ -668,41 +1510,69 @@ async function registerSchool() {
    LOGIN SUCCESS
 ========================================================= */
 
-function loginSuccess(session) {
+function loginSuccess(
+    session
+) {
+
+    S =
+        session;
+
 
     localStorage.setItem(
         "evs",
-        JSON.stringify(session)
+        JSON.stringify(
+            session
+        )
     );
 
-    S = session;
 
-    start(session);
+    showToast(
+        `Welcome, ${session.name}.`,
+        "success"
+    );
+
+
+    start(
+        session
+    );
 }
 
 
 /* =========================================================
-   START APPLICATION
+   START APP
 ========================================================= */
 
-function start(session) {
+function start(
+    session
+) {
 
-    S = session;
-
-    $("#home").classList.add("hidden");
-    $("#login").classList.add("hidden");
-
-    $("#home").style.display = "none";
-    $("#login").style.display = "none";
-
-    $("#app").classList.remove("hidden");
-    $("#app").style.display = "grid";
+    S =
+        session;
 
 
-    $("#who").innerHTML = `
-        <b>${safe(session.name)}</b>
+    showView(
+        "app"
+    );
+
+
+    const who =
+        $("#who");
+
+
+    who.innerHTML = `
+
+        <b>
+            ${safe(
+                session.name
+            )}
+        </b>
+
         <br>
-        ${safe(session.role)}
+
+        ${safe(
+            session.role
+        )}
+
     `;
 
 
@@ -715,11 +1585,13 @@ function start(session) {
     ) {
 
         pages = [
+
             "Dashboard",
+
             "Schools"
         ];
-
     }
+
 
     else if (
         session.role ===
@@ -727,42 +1599,68 @@ function start(session) {
     ) {
 
         pages = [
+
             "Dashboard",
+
             "Students",
+
             "Teachers",
+
             "Smart Attendance",
+
             "Smart Occupancy",
+
             "Reports",
+
             "Settings"
         ];
-
     }
 
-    else {
+
+    else if (
+        session.role ===
+        "Teacher"
+    ) {
 
         pages = [
+
             "Dashboard",
+
             "Students",
+
             "Smart Attendance",
+
             "Smart Occupancy",
+
             "Reports"
         ];
     }
 
 
     $("#nav").innerHTML =
-        pages.map(name => `
 
-            <button
-                onclick="page('${name}')"
-            >
-                <span>${name}</span>
-            </button>
+        pages.map(
+            name => `
 
-        `).join("");
+                <button
+                    class="nav-button"
+                    data-page="${safe(name)}"
+                    onclick="page('${safe(name)}')"
+                >
+
+                    <span>
+                        ${safe(name)}
+                    </span>
+
+                </button>
+
+            `
+        ).join("");
 
 
-    page("Dashboard");
+    page(
+        "Dashboard"
+    );
 }
 
 
@@ -774,73 +1672,71 @@ function logout() {
 
     stopCamera();
 
-    localStorage.removeItem("evs");
 
-    S = null;
+    localStorage.removeItem(
+        "evs"
+    );
 
-    window.location.reload();
+
+    S =
+        null;
+
+
+    showView(
+        "home"
+    );
+
+
+    showToast(
+        "Logged out.",
+        "info"
+    );
 }
 
 
 /* =========================================================
-   DATABASE COUNT
+   ACTIVE NAVIGATION
 ========================================================= */
 
-async function countRows(
-    table,
-    key = null,
-    value = null
+function setActiveNav(
+    name
 ) {
 
-    if (!db) {
-        return 0;
-    }
+    document
+        .querySelectorAll(
+            "#nav .nav-button"
+        )
+        .forEach(
+            button => {
+
+                const active =
+                    button.dataset.page ===
+                    name;
 
 
-    let query = db
-        .from(table)
-        .select(
-            "*",
-            {
-                count: "exact",
-                head: true
+                button.classList.toggle(
+                    "active",
+                    active
+                );
+
+
+                if (active) {
+
+                    button.setAttribute(
+                        "aria-current",
+                        "page"
+                    );
+
+                }
+
+                else {
+
+                    button.removeAttribute(
+                        "aria-current"
+                    );
+                }
             }
         );
-
-
-    if (
-        S &&
-        S.school
-    ) {
-
-        query =
-            query.eq(
-                "school_id",
-                S.school
-            );
-    }
-
-
-    if (key) {
-
-        query =
-            query.eq(
-                key,
-                value
-            );
-    }
-
-
-    const result =
-        await query;
-
-
-    if (result.error) {
-        throw result.error;
-    }
-
-
-    return result.count || 0;
 }
 
 
@@ -848,23 +1744,33 @@ async function countRows(
    PAGE ROUTER
 ========================================================= */
 
-async function page(name) {
+async function page(
+    name
+) {
 
     stopCamera();
+
+
+    setActiveNav(
+        name
+    );
+
 
     $("#title").textContent =
         name;
 
-    $("#page").innerHTML = `
-        <div class="box">
-            Loading...
-        </div>
-    `;
+
+    $("#page").innerHTML =
+        renderLoading(
+            `Loading ${name}`
+        );
 
 
     try {
 
-        if (name === "Dashboard") {
+        if (
+            name === "Dashboard"
+        ) {
 
             await dashboardPage();
 
@@ -872,7 +1778,9 @@ async function page(name) {
         }
 
 
-        if (name === "Students") {
+        if (
+            name === "Students"
+        ) {
 
             await studentsPage();
 
@@ -880,7 +1788,9 @@ async function page(name) {
         }
 
 
-        if (name === "Teachers") {
+        if (
+            name === "Teachers"
+        ) {
 
             await teachersPage();
 
@@ -910,7 +1820,9 @@ async function page(name) {
         }
 
 
-        if (name === "Reports") {
+        if (
+            name === "Reports"
+        ) {
 
             await reportsPage();
 
@@ -918,7 +1830,9 @@ async function page(name) {
         }
 
 
-        if (name === "Schools") {
+        if (
+            name === "Schools"
+        ) {
 
             await schoolsPage();
 
@@ -926,7 +1840,9 @@ async function page(name) {
         }
 
 
-        if (name === "Settings") {
+        if (
+            name === "Settings"
+        ) {
 
             settingsPage();
 
@@ -935,150 +1851,454 @@ async function page(name) {
 
 
         $("#page").innerHTML = `
+
             <div class="box">
-                Page not found.
+
+                ${emptyState(
+                    "Page not found",
+                    "This page is not available."
+                )}
+
             </div>
+
         `;
 
     }
 
     catch (error) {
 
-        showDatabaseError(error);
+        showDatabaseError(
+            error
+        );
     }
 }
-
-
 /* =========================================================
    DASHBOARD
 ========================================================= */
 
 async function dashboardPage() {
 
-    try {
+    if (!db) {
 
-        /* =====================================
-           EDUVISION ADMIN DASHBOARD
-        ===================================== */
+        throw new Error(
+            "Database connection is not available."
+        );
+    }
 
-        if (S.role === "EduVision Admin") {
 
-            if (!db) {
-                throw new Error(
-                    "Database connection is not available."
-                );
-            }
+    /* =====================================================
+       EDUVISION ADMIN DASHBOARD
+    ===================================================== */
 
-            const result = await db
+    if (
+        S.role ===
+        "EduVision Admin"
+    ) {
+
+        const {
+            data,
+            error
+        } =
+            await db
                 .from("schools")
-                .select("school_id, approval_status");
+                .select(
+                    "school_id, school_name, approval_status, created_at"
+                );
 
 
-            if (result.error) {
-                throw result.error;
+        if (error) {
+            throw error;
+        }
+
+
+        const schools =
+            Array.isArray(data)
+                ? data
+                : [];
+
+
+        const pending =
+            schools.filter(
+                school =>
+                    school.approval_status ===
+                    "Pending"
+            ).length;
+
+
+        const approved =
+            schools.filter(
+                school =>
+                    school.approval_status ===
+                    "Approved"
+            ).length;
+
+
+        const rejected =
+            schools.filter(
+                school =>
+                    school.approval_status ===
+                    "Rejected"
+            ).length;
+
+
+        const recent =
+            [...schools]
+                .sort(
+                    (a, b) =>
+                        new Date(
+                            b.created_at || 0
+                        ) -
+                        new Date(
+                            a.created_at || 0
+                        )
+                )
+                .slice(
+                    0,
+                    5
+                );
+
+
+        $("#page").innerHTML = `
+
+            ${stats([
+
+                [
+                    "Pending Schools",
+                    pending
+                ],
+
+                [
+                    "Approved Schools",
+                    approved
+                ],
+
+                [
+                    "Total Schools",
+                    schools.length
+                ],
+
+                [
+                    "System",
+                    "Online"
+                ]
+
+            ])}
+
+
+            <div
+                class="box"
+                style="margin-top:18px"
+            >
+
+                <h3>
+                    EduVision Overview
+                </h3>
+
+
+                <p class="muted">
+                    Review school registrations
+                    and manage access to EduVision.
+                </p>
+
+
+                <div class="tools">
+
+                    <button
+                        class="no-zoom"
+                        onclick="page('Schools')"
+                    >
+                        Manage Schools
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <div
+                class="box"
+                style="margin-top:18px"
+            >
+
+                <h3>
+                    Recent Registrations
+                </h3>
+
+
+                ${
+                    recent.length
+
+                        ? `
+
+                        <div class="table">
+
+                            <table>
+
+                                <thead>
+
+                                    <tr>
+
+                                        <th>
+                                            School
+                                        </th>
+
+                                        <th>
+                                            School ID
+                                        </th>
+
+                                        <th>
+                                            Status
+                                        </th>
+
+                                    </tr>
+
+                                </thead>
+
+
+                                <tbody>
+
+                                    ${recent.map(
+                                        school => `
+
+                                            <tr>
+
+                                                <td>
+                                                    ${safe(
+                                                        school.school_name
+                                                    )}
+                                                </td>
+
+                                                <td>
+                                                    ${safe(
+                                                        school.school_id
+                                                    )}
+                                                </td>
+
+                                                <td>
+                                                    ${safe(
+                                                        school.approval_status
+                                                    )}
+                                                </td>
+
+                                            </tr>
+
+                                        `
+                                    ).join("")}
+
+                                </tbody>
+
+                            </table>
+
+                        </div>
+
+                        `
+
+                        :
+
+                        emptyState(
+                            "No schools yet",
+                            "School registrations will appear here."
+                        )
+                }
+
+            </div>
+
+
+            ${
+                rejected > 0
+
+                    ? `
+
+                    <div
+                        class="inline-status info"
+                        style="margin-top:18px"
+                    >
+
+                        <span
+                            class="inline-status-icon"
+                        >
+                            i
+                        </span>
+
+                        <span>
+                            ${safe(rejected)}
+                            rejected school
+                            ${
+                                rejected === 1
+                                    ? "registration"
+                                    : "registrations"
+                            }.
+                        </span>
+
+                    </div>
+
+                    `
+
+                    : ""
             }
 
-
-            const schools = result.data || [];
-
-
-            const pending = schools.filter(
-                school =>
-                    school.approval_status === "Pending"
-            ).length;
+        `;
 
 
-            const approved = schools.filter(
-                school =>
-                    school.approval_status === "Approved"
-            ).length;
+        return;
+    }
 
 
-            $("#page").innerHTML = stats([
-                ["Pending Schools", pending],
-                ["Approved Schools", approved],
-                ["Total Schools", schools.length],
-                ["System", "Online"]
-            ]);
+    /* =====================================================
+       SCHOOL ADMIN / TEACHER DASHBOARD
+    ===================================================== */
 
-            return;
-        }
+    if (
+        !S.school
+    ) {
+
+        throw new Error(
+            "School information is missing from this session."
+        );
+    }
 
 
-        /* =====================================
-           SCHOOL / TEACHER DASHBOARD
-        ===================================== */
+    const today =
+        localDate();
 
-        if (!db) {
-            throw new Error(
-                "Database connection is not available."
+
+    const [
+        studentsResult,
+        teachersResult,
+        attendanceResult
+    ] =
+        await Promise.all([
+
+            db
+                .from("students")
+                .select(
+                    "*",
+                    {
+                        count: "exact",
+                        head: true
+                    }
+                )
+                .eq(
+                    "school_id",
+                    S.school
+                )
+                .eq(
+                    "status",
+                    "Active"
+                ),
+
+
+            db
+                .from("teachers")
+                .select(
+                    "*",
+                    {
+                        count: "exact",
+                        head: true
+                    }
+                )
+                .eq(
+                    "school_id",
+                    S.school
+                )
+                .eq(
+                    "enabled",
+                    true
+                ),
+
+
+            db
+                .from("attendance")
+                .select(
+                    "*",
+                    {
+                        count: "exact",
+                        head: true
+                    }
+                )
+                .eq(
+                    "school_id",
+                    S.school
+                )
+                .eq(
+                    "attendance_date",
+                    today
+                )
+
+        ]);
+
+
+    if (
+        studentsResult.error
+    ) {
+        throw studentsResult.error;
+    }
+
+
+    if (
+        teachersResult.error
+    ) {
+        throw teachersResult.error;
+    }
+
+
+    if (
+        attendanceResult.error
+    ) {
+        throw attendanceResult.error;
+    }
+
+
+    const studentCount =
+        studentsResult.count || 0;
+
+
+    const teacherCount =
+        teachersResult.count || 0;
+
+
+    const markedToday =
+        attendanceResult.count || 0;
+
+
+    let attendancePercent =
+        0;
+
+
+    if (
+        studentCount > 0
+    ) {
+
+        attendancePercent =
+            Math.min(
+                100,
+                Math.round(
+                    (
+                        markedToday /
+                        studentCount
+                    ) * 100
+                )
             );
-        }
+    }
 
 
-        const today = localDate();
+    $("#page").innerHTML = `
 
-
-        const studentsResult = await db
-            .from("students")
-            .select("*", {
-                count: "exact",
-                head: true
-            })
-            .eq("school_id", S.school)
-            .eq("status", "Active");
-
-
-        if (studentsResult.error) {
-            throw studentsResult.error;
-        }
-
-
-        const teachersResult = await db
-            .from("teachers")
-            .select("*", {
-                count: "exact",
-                head: true
-            })
-            .eq("school_id", S.school)
-            .eq("enabled", true);
-
-
-        if (teachersResult.error) {
-            throw teachersResult.error;
-        }
-
-
-        const attendanceResult = await db
-            .from("attendance")
-            .select("*", {
-                count: "exact",
-                head: true
-            })
-            .eq("school_id", S.school)
-            .eq("attendance_date", today);
-
-
-        if (attendanceResult.error) {
-            throw attendanceResult.error;
-        }
-
-
-        $("#page").innerHTML = stats([
+        ${stats([
 
             [
                 "Active Students",
-                studentsResult.count || 0
+                studentCount
             ],
 
             [
                 "Teachers",
-                teachersResult.count || 0
+                teacherCount
             ],
 
             [
                 "Marked Today",
-                attendanceResult.count || 0
+                markedToday
             ],
 
             [
@@ -1086,134 +2306,224 @@ async function dashboardPage() {
                 "Online"
             ]
 
-        ]);
-
-    }
-
-    catch (error) {
-
-        console.error(
-            "Dashboard error:",
-            error
-        );
+        ])}
 
 
-        $("#page").innerHTML = `
+        <div
+            class="box"
+            style="margin-top:18px"
+        >
 
-            <div class="box">
+            <h3>
+                Today's Attendance
+            </h3>
 
-                <h3>
-                    Dashboard could not load
-                </h3>
 
-                <p class="muted">
-                    ${safe(
-                        error?.message ||
-                        "Database connection failed."
-                    )}
-                </p>
+            <p class="muted">
+                ${safe(markedToday)}
+                of
+                ${safe(studentCount)}
+                active students have attendance
+                recorded today.
+            </p>
+
+
+            <div class="progress-block">
+
+                <div class="progress-header">
+
+                    <span>
+                        Attendance progress
+                    </span>
+
+                    <b>
+                        ${safe(attendancePercent)}%
+                    </b>
+
+                </div>
+
+
+                <div class="progress-track">
+
+                    <div
+                        class="progress-fill"
+                        style="
+                            width:
+                            ${safe(attendancePercent)}%
+                        "
+                    ></div>
+
+                </div>
+
+            </div>
+
+
+            <div class="tools">
 
                 <button
-                    onclick="page('Dashboard')"
+                    class="no-zoom"
+                    onclick="page('Smart Attendance')"
                 >
-                    Try Again
+                    Open Smart Attendance
+                </button>
+
+
+                <button
+                    class="no-zoom"
+                    onclick="page('Reports')"
+                >
+                    View Reports
                 </button>
 
             </div>
 
-        `;
-    }
+        </div>
+
+
+        <div
+            class="box"
+            style="margin-top:18px"
+        >
+
+            <h3>
+                Classroom Tools
+            </h3>
+
+
+            <p class="muted">
+                EduVision helps reduce time spent
+                on routine classroom management.
+            </p>
+
+
+            <div class="tools">
+
+                <button
+                    class="no-zoom"
+                    onclick="page('Students')"
+                >
+                    Students
+                </button>
+
+
+                <button
+                    class="no-zoom"
+                    onclick="page('Smart Occupancy')"
+                >
+                    Live Classroom
+                </button>
+
+            </div>
+
+        </div>
+
+    `;
 }
 
-/* =========================================================
-   LOCAL DATE
-========================================================= */
-
-function localDate() {
-
-    const d = new Date();
-
-    const year =
-        d.getFullYear();
-
-    const month =
-        String(
-            d.getMonth() + 1
-        ).padStart(2, "0");
-
-    const day =
-        String(
-            d.getDate()
-        ).padStart(2, "0");
-
-
-    return `${year}-${month}-${day}`;
-}
-
 
 /* =========================================================
-   STUDENTS
+   STUDENTS PAGE
 ========================================================= */
 
 async function studentsPage() {
 
     if (!db) {
+
         throw new Error(
             "Database is not configured."
         );
     }
 
 
-    const studentsResult =
-        await db
-            .from("students")
-            .select("*")
-            .eq(
-                "school_id",
-                S.school
-            )
-            .order(
-                "created_at",
-                {
-                    ascending: false
-                }
-            );
+    if (
+        !S ||
+        !S.school
+    ) {
+
+        throw new Error(
+            "School information is missing."
+        );
+    }
 
 
-    if (studentsResult.error) {
+    const [
+        studentsResult,
+        facesResult
+    ] =
+        await Promise.all([
+
+            db
+                .from("students")
+                .select("*")
+                .eq(
+                    "school_id",
+                    S.school
+                )
+                .order(
+                    "created_at",
+                    {
+                        ascending: false
+                    }
+                ),
+
+
+            db
+                .from("face_profiles")
+                .select(
+                    "student_id"
+                )
+                .eq(
+                    "school_id",
+                    S.school
+                )
+
+        ]);
+
+
+    if (
+        studentsResult.error
+    ) {
         throw studentsResult.error;
     }
 
 
     const students =
-        studentsResult.data || [];
+        Array.isArray(
+            studentsResult.data
+        )
 
+            ? studentsResult.data
 
-    const facesResult =
-        await db
-            .from("face_profiles")
-            .select("student_id")
-            .eq(
-                "school_id",
-                S.school
-            );
+            : [];
 
 
     const registered =
         new Set();
 
 
-    if (!facesResult.error) {
+    if (
+        !facesResult.error &&
+        Array.isArray(
+            facesResult.data
+        )
+    ) {
 
-        for (
-            const face
-            of facesResult.data || []
-        ) {
+        facesResult.data
+            .forEach(
+                face => {
 
-            registered.add(
-                face.student_id
+                    if (
+                        face.student_id
+                    ) {
+
+                        registered.add(
+                            String(
+                                face.student_id
+                            )
+                        );
+                    }
+                }
             );
-        }
     }
 
 
@@ -1223,193 +2533,357 @@ async function studentsPage() {
             S.role ===
             "School Admin"
 
-            ? `
+                ? `
 
-            <div class="box">
+                <div class="box">
 
-                <h3>
-                    Add Student
-                </h3>
-
-                <div class="tools">
-
-                    <input
-                        id="studentId"
-                        placeholder="Student ID"
-                    >
-
-                    <input
-                        id="studentName"
-                        placeholder="Name"
-                    >
-
-                    <input
-                        id="studentClass"
-                        placeholder="Class"
-                    >
-
-                    <input
-                        id="studentRoll"
-                        placeholder="Roll No"
-                    >
-
-                    <button
-                        onclick="addStudent()"
-                    >
+                    <h3>
                         Add Student
-                    </button>
+                    </h3>
+
+
+                    <p class="muted">
+                        Add a student to your
+                        EduVision school.
+                    </p>
+
+
+                    <div class="tools">
+
+                        <input
+                            id="studentId"
+                            placeholder="Student ID"
+                            autocomplete="off"
+                        >
+
+
+                        <input
+                            id="studentName"
+                            placeholder="Student Name"
+                            autocomplete="off"
+                        >
+
+
+                        <input
+                            id="studentClass"
+                            placeholder="Class"
+                            autocomplete="off"
+                        >
+
+
+                        <input
+                            id="studentRoll"
+                            placeholder="Roll No"
+                            autocomplete="off"
+                        >
+
+
+                        <button
+                            class="no-zoom"
+                            onclick="addStudent()"
+                        >
+                            Add Student
+                        </button>
+
+                    </div>
+
+                </div>
+
+                `
+
+                : ""
+        }
+
+
+        <div
+            class="box"
+            style="margin-top:18px"
+        >
+
+            <div
+                style="
+                    display:flex;
+                    justify-content:space-between;
+                    gap:12px;
+                    align-items:center;
+                    flex-wrap:wrap;
+                "
+            >
+
+                <div>
+
+                    <h3
+                        style="
+                            margin-bottom:4px;
+                        "
+                    >
+                        Students
+                    </h3>
+
+                    <span class="muted">
+                        ${safe(students.length)}
+                        registered
+                    </span>
 
                 </div>
 
             </div>
 
-            `
 
-            : ""
-        }
-
-
-        <div class="table">
-
-            <table>
-
-                <tr>
-                    <th>ID</th>
-                    <th>Name</th>
-                    <th>Class</th>
-                    <th>Roll</th>
-                    <th>Status</th>
-                    <th>Smart Attendance</th>
-                </tr>
+            ${renderSearchBar(
+                "studentSearch",
+                "Search students..."
+            )}
 
 
-                ${students.map(student => `
+            ${
+                students.length
 
-                    <tr>
+                    ? `
 
-                        <td>
-                            ${safe(
-                                student.student_id
-                            )}
-                        </td>
+                    <div
+                        class="table"
+                        id="studentsTable"
+                    >
 
-                        <td>
-                            ${safe(
-                                student.name
-                            )}
-                        </td>
+                        <table>
 
-                        <td>
-                            ${safe(
-                                student.class_name
-                            )}
-                        </td>
+                            <thead>
 
-                        <td>
-                            ${safe(
-                                student.roll_no
-                            )}
-                        </td>
+                                <tr>
 
-                        <td>
-                            ${safe(
-                                student.status
-                            )}
-                        </td>
+                                    <th>
+                                        ID
+                                    </th>
 
-                        <td>
+                                    <th>
+                                        Name
+                                    </th>
 
-                            ${
-                                registered.has(
-                                    student.student_id
-                                )
+                                    <th>
+                                        Class
+                                    </th>
 
-                                ? `
+                                    <th>
+                                        Roll
+                                    </th>
 
-                                <span
-                                    style="
-                                    color:#4ade80;
-                                    font-weight:bold;
-                                    "
-                                >
-                                    ✓ Registered
-                                </span>
+                                    <th>
+                                        Status
+                                    </th>
 
-                                ${
-                                    S.role ===
-                                    "School Admin"
+                                    <th>
+                                        Smart Attendance
+                                    </th>
 
-                                    ? `
+                                </tr>
 
-                                    <button
-                                        onclick="registerFace(
-                                            '${safe(
-                                                student.student_id
-                                            )}'
-                                        )"
-                                    >
-                                        Update
-                                    </button>
+                            </thead>
 
-                                    `
 
-                                    : ""
-                                }
+                            <tbody>
 
-                                `
+                                ${students.map(
+                                    student => {
 
-                                :
+                                        const hasFace =
+                                            registered.has(
+                                                String(
+                                                    student.student_id
+                                                )
+                                            );
 
-                                S.role ===
-                                "School Admin"
 
-                                ? `
+                                        return `
 
-                                <button
-                                    onclick="registerFace(
-                                        '${safe(
-                                            student.student_id
-                                        )}'
-                                    )"
-                                >
-                                    Register Face
-                                </button>
+                                            <tr
+                                                data-search-item
+                                            >
 
-                                `
+                                                <td>
+                                                    ${safe(
+                                                        student.student_id
+                                                    )}
+                                                </td>
 
-                                : `
 
-                                <span class="muted">
-                                    Not Registered
-                                </span>
+                                                <td>
+                                                    <b>
+                                                        ${safe(
+                                                            student.name
+                                                        )}
+                                                    </b>
+                                                </td>
 
-                                `
-                            }
 
-                        </td>
+                                                <td>
+                                                    ${safe(
+                                                        student.class_name
+                                                    )}
+                                                </td>
 
-                    </tr>
 
-                `).join("")}
+                                                <td>
+                                                    ${safe(
+                                                        student.roll_no ||
+                                                        "-"
+                                                    )}
+                                                </td>
 
-            </table>
+
+                                                <td>
+
+                                                    ${
+                                                        student.status ===
+                                                        "Active"
+
+                                                            ? `
+
+                                                            <span
+                                                                style="
+                                                                    color:#5ad4a4;
+                                                                    font-weight:700;
+                                                                "
+                                                            >
+                                                                Active
+                                                            </span>
+
+                                                            `
+
+                                                            : safe(
+                                                                student.status
+                                                            )
+                                                    }
+
+                                                </td>
+
+
+                                                <td>
+
+                                                    ${
+                                                        hasFace
+
+                                                            ? `
+
+                                                            <span
+                                                                style="
+                                                                    color:#5ad4a4;
+                                                                    font-weight:700;
+                                                                    margin-right:8px;
+                                                                "
+                                                            >
+                                                                ✓ Registered
+                                                            </span>
+
+
+                                                            ${
+                                                                S.role ===
+                                                                "School Admin"
+
+                                                                    ? `
+
+                                                                    <button
+                                                                        class="small-button no-zoom"
+                                                                        onclick="registerFace(
+                                                                            '${safe(
+                                                                                student.student_id
+                                                                            )}'
+                                                                        )"
+                                                                    >
+                                                                        Update
+                                                                    </button>
+
+                                                                    `
+
+                                                                    : ""
+                                                            }
+
+                                                            `
+
+                                                            :
+
+                                                            S.role ===
+                                                            "School Admin"
+
+                                                                ? `
+
+                                                                <button
+                                                                    class="small-button no-zoom"
+                                                                    onclick="registerFace(
+                                                                        '${safe(
+                                                                            student.student_id
+                                                                        )}'
+                                                                    )"
+                                                                >
+                                                                    Register Face
+                                                                </button>
+
+                                                                `
+
+                                                                : `
+
+                                                                <span class="muted">
+                                                                    Not Registered
+                                                                </span>
+
+                                                                `
+                                                    }
+
+                                                </td>
+
+                                            </tr>
+
+                                        `;
+                                    }
+                                ).join("")}
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
+
+                    `
+
+                    :
+
+                    emptyState(
+                        "No students yet",
+                        S.role === "School Admin"
+                            ? "Add your first student using the form above."
+                            : "No students have been added to this school."
+                    )
+            }
 
         </div>
 
 
-        <div class="box">
+        <div
+            class="inline-status info"
+            style="margin-top:18px"
+        >
 
-            <p class="muted">
+            <span
+                class="inline-status-icon"
+            >
+                i
+            </span>
 
+            <span>
                 Smart Attendance face profiles
-                should only be registered for
-                consenting demo participants with
-                appropriate permission.
-
-            </p>
+                should only be registered with
+                appropriate permission and consent.
+            </span>
 
         </div>
+
     `;
+
+
+    bindSimpleSearch(
+        "studentSearch",
+        "#studentsTable"
+    );
 }
 
 
@@ -1419,29 +2893,118 @@ async function studentsPage() {
 
 async function addStudent() {
 
+    if (
+        S.role !==
+        "School Admin"
+    ) {
+
+        showToast(
+            "School Admin access required.",
+            "error"
+        );
+
+        return;
+    }
+
+
+    const studentIdElement =
+        $("#studentId");
+
+    const studentNameElement =
+        $("#studentName");
+
+    const studentClassElement =
+        $("#studentClass");
+
+    const studentRollElement =
+        $("#studentRoll");
+
+
+    if (
+        !studentIdElement ||
+        !studentNameElement ||
+        !studentClassElement
+    ) {
+
+        return;
+    }
+
+
+    const studentId =
+        studentIdElement
+            .value
+            .trim();
+
+
+    const name =
+        studentNameElement
+            .value
+            .trim();
+
+
+    const className =
+        studentClassElement
+            .value
+            .trim();
+
+
+    const roll =
+        studentRollElement
+            ? studentRollElement
+                .value
+                .trim()
+
+            : "";
+
+
+    if (
+        !studentId ||
+        !name ||
+        !className
+    ) {
+
+        showToast(
+            "Enter Student ID, Name and Class.",
+            "error"
+        );
+
+        return;
+    }
+
+
     try {
 
-        const studentId =
-            $("#studentId").value.trim();
-
-        const name =
-            $("#studentName").value.trim();
-
-        const className =
-            $("#studentClass").value.trim();
-
-        const roll =
-            $("#studentRoll").value.trim();
+        const existing =
+            await db
+                .from("students")
+                .select(
+                    "student_id"
+                )
+                .eq(
+                    "school_id",
+                    S.school
+                )
+                .eq(
+                    "student_id",
+                    studentId
+                )
+                .maybeSingle();
 
 
         if (
-            !studentId ||
-            !name ||
-            !className
+            existing.error
+        ) {
+            throw existing.error;
+        }
+
+
+        if (
+            existing.data
         ) {
 
-            alert(
-                "Enter Student ID, Name and Class."
+            showToast(
+                "That Student ID already exists.",
+                "error"
             );
 
             return;
@@ -1452,31 +3015,55 @@ async function addStudent() {
             await db
                 .from("students")
                 .insert({
-                    school_id: S.school,
-                    student_id: studentId,
-                    name: name,
-                    class_name: className,
-                    roll_no: roll,
-                    status: "Active"
+
+                    school_id:
+                        S.school,
+
+                    student_id:
+                        studentId,
+
+                    name:
+                        name,
+
+                    class_name:
+                        className,
+
+                    roll_no:
+                        roll,
+
+                    status:
+                        "Active"
                 });
 
 
-        if (result.error) {
+        if (
+            result.error
+        ) {
             throw result.error;
         }
 
 
-        alert("Student added.");
+        showToast(
+            `${name} added successfully.`,
+            "success"
+        );
 
-        studentsPage();
+
+        await studentsPage();
 
     }
 
     catch (error) {
 
-        alert(
-            error.message ||
-            "Could not add student."
+        console.error(
+            error
+        );
+
+
+        showToast(
+            error?.message ||
+            "Could not add student.",
+            "error"
         );
     }
 }
@@ -1488,15 +3075,20 @@ async function addStudent() {
 
 async function loadFaceModels() {
 
-    if (faceModelsReady) {
+    if (
+        faceModelsReady
+    ) {
+
         return true;
     }
 
 
-    if (!window.faceapi) {
+    if (
+        !window.faceapi
+    ) {
 
         throw new Error(
-            "Face recognition library did not load."
+            "Smart Attendance library did not load."
         );
     }
 
@@ -1506,8 +3098,24 @@ async function loadFaceModels() {
 
 
     if (status) {
-        status.textContent =
-            "Loading Smart Attendance AI...";
+
+        status.innerHTML = `
+
+            <div class="inline-status info">
+
+                <span
+                    class="inline-status-icon"
+                >
+                    AI
+                </span>
+
+                <span>
+                    Loading Smart Attendance...
+                </span>
+
+            </div>
+
+        `;
     }
 
 
@@ -1519,11 +3127,13 @@ async function loadFaceModels() {
                 FACE_MODEL_URL
             ),
 
+
         faceapi.nets
             .faceLandmark68Net
             .loadFromUri(
                 FACE_MODEL_URL
             ),
+
 
         faceapi.nets
             .faceRecognitionNet
@@ -1534,12 +3144,29 @@ async function loadFaceModels() {
     ]);
 
 
-    faceModelsReady = true;
+    faceModelsReady =
+        true;
 
 
     if (status) {
-        status.textContent =
-            "Smart Attendance ready.";
+
+        status.innerHTML = `
+
+            <div class="inline-status success">
+
+                <span
+                    class="inline-status-icon"
+                >
+                    ✓
+                </span>
+
+                <span>
+                    Smart Attendance ready.
+                </span>
+
+            </div>
+
+        `;
     }
 
 
@@ -1560,11 +3187,26 @@ async function openCamera(
 
     if (
         !navigator.mediaDevices ||
-        !navigator.mediaDevices.getUserMedia
+        !navigator.mediaDevices
+            .getUserMedia
     ) {
 
         throw new Error(
-            "Camera is not supported by this browser."
+            "Camera access is not supported by this browser."
+        );
+    }
+
+
+    const container =
+        document.getElementById(
+            containerId
+        );
+
+
+    if (!container) {
+
+        throw new Error(
+            "Camera area could not be found."
         );
     }
 
@@ -1574,44 +3216,37 @@ async function openCamera(
             .getUserMedia({
 
                 video: {
-                    facingMode: "user",
+
+                    facingMode:
+                        "user",
 
                     width: {
-                        ideal: 960
+                        ideal:
+                            960
                     },
 
                     height: {
-                        ideal: 540
+                        ideal:
+                            540
                     }
                 },
 
-                audio: false
+                audio:
+                    false
             });
-
-
-    const container =
-        $("#" + containerId);
-
-
-    if (!container) {
-
-        throw new Error(
-            "Camera container was not found."
-        );
-    }
 
 
     container.innerHTML = `
 
         <video
-            id="${containerId}Video"
+            id="${safe(containerId)}Video"
             autoplay
             muted
             playsinline
         ></video>
 
         <canvas
-            id="${containerId}Canvas"
+            id="${safe(containerId)}Canvas"
         ></canvas>
 
     `;
@@ -1622,7 +3257,18 @@ async function openCamera(
 
 
     const video =
-        $("#" + containerId + "Video");
+        document.getElementById(
+            containerId +
+            "Video"
+        );
+
+
+    if (!video) {
+
+        throw new Error(
+            "Camera video could not be created."
+        );
+    }
 
 
     video.srcObject =
@@ -1637,50 +3283,64 @@ async function openCamera(
 
 
 /* =========================================================
-   STOP ALL CAMERA AI
+   STOP CAMERA / AI
 ========================================================= */
 
 function stopCamera() {
 
-    if (attendanceTimer) {
+    if (
+        attendanceTimer
+    ) {
 
         clearInterval(
             attendanceTimer
         );
 
-        attendanceTimer = null;
+        attendanceTimer =
+            null;
     }
 
 
-    if (occupancyTimer) {
+    if (
+        occupancyTimer
+    ) {
 
         clearInterval(
             occupancyTimer
         );
 
-        occupancyTimer = null;
+        occupancyTimer =
+            null;
     }
 
 
-    attendanceBusy = false;
-    occupancyBusy = false;
+    attendanceBusy =
+        false;
+
+    occupancyBusy =
+        false;
 
 
-    if (cameraStream) {
+    if (
+        cameraStream
+    ) {
 
         cameraStream
             .getTracks()
             .forEach(
-                track => track.stop()
+                track =>
+                    track.stop()
             );
 
-        cameraStream = null;
+
+        cameraStream =
+            null;
     }
 }
 
 
 /* =========================================================
-   REGISTER FACE
+   REGISTER FACE PAGE
 ========================================================= */
 
 async function registerFace(
@@ -1690,9 +3350,26 @@ async function registerFace(
     stopCamera();
 
 
+    if (
+        S.role !==
+        "School Admin"
+    ) {
+
+        showToast(
+            "School Admin access required.",
+            "error"
+        );
+
+        return;
+    }
+
+
     try {
 
-        const result =
+        const {
+            data,
+            error
+        } =
             await db
                 .from("students")
                 .select("*")
@@ -1707,27 +3384,33 @@ async function registerFace(
                 .maybeSingle();
 
 
-        if (result.error) {
-            throw result.error;
+        if (error) {
+            throw error;
         }
 
 
-        const student =
-            result.data;
+        if (!data) {
 
-
-        if (!student) {
-
-            alert(
-                "Student not found."
+            showToast(
+                "Student not found.",
+                "error"
             );
 
             return;
         }
 
 
+        const student =
+            data;
+
+
         $("#title").textContent =
             "Register Face";
+
+
+        setActiveNav(
+            "Students"
+        );
 
 
         $("#page").innerHTML = `
@@ -1738,23 +3421,70 @@ async function registerFace(
                     Register Smart Attendance Profile
                 </h3>
 
+
                 <p>
+
                     <b>
-                        ${safe(student.name)}
+                        ${safe(
+                            student.name
+                        )}
                     </b>
 
+                    <br>
+
                     <span class="muted">
-                        ${safe(student.student_id)}
+
+                        ${safe(
+                            student.student_id
+                        )}
+
                         •
-                        ${safe(student.class_name)}
+
+                        ${safe(
+                            student.class_name
+                        )}
+
                     </span>
+
                 </p>
 
 
-                <p class="muted">
-                    Use a consenting demo participant.
-                    Keep exactly one face clearly visible.
-                </p>
+                <div class="inline-status info">
+
+                    <span
+                        class="inline-status-icon"
+                    >
+                        i
+                    </span>
+
+                    <span>
+                        Register only a consenting
+                        participant with appropriate
+                        school or guardian permission.
+                        Camera frames are used to
+                        calculate the recognition
+                        profile.
+                    </span>
+
+                </div>
+
+
+                <label
+                    class="consent-row"
+                >
+
+                    <input
+                        id="faceConsent"
+                        type="checkbox"
+                    >
+
+                    <span>
+                        Appropriate permission has
+                        been obtained for this
+                        Smart Attendance profile.
+                    </span>
+
+                </label>
 
 
                 <div
@@ -1768,14 +3498,19 @@ async function registerFace(
                 <div class="tools">
 
                     <button
+                        class="no-zoom"
                         onclick="captureStudentFace(
-                            '${safe(studentId)}'
+                            '${safe(
+                                student.student_id
+                            )}'
                         )"
                     >
                         Start Camera & Register
                     </button>
 
+
                     <button
+                        class="no-zoom"
                         onclick="page('Students')"
                     >
                         Cancel
@@ -1786,25 +3521,41 @@ async function registerFace(
 
                 <div
                     id="faceStatus"
-                    class="box"
                 >
-                    Ready.
+
+                    <div class="inline-status info">
+
+                        <span
+                            class="inline-status-icon"
+                        >
+                            i
+                        </span>
+
+                        <span>
+                            Ready to register.
+                        </span>
+
+                    </div>
+
                 </div>
 
             </div>
+
         `;
 
     }
 
     catch (error) {
 
-        showDatabaseError(error);
+        showDatabaseError(
+            error
+        );
     }
 }
 
 
 /* =========================================================
-   CAPTURE FACE
+   CAPTURE STUDENT FACE
 ========================================================= */
 
 async function captureStudentFace(
@@ -1815,13 +3566,49 @@ async function captureStudentFace(
         $("#faceStatus");
 
 
+    const consent =
+        $("#faceConsent");
+
+
+    if (
+        !consent ||
+        !consent.checked
+    ) {
+
+        showToast(
+            "Confirm permission before registering the face profile.",
+            "error"
+        );
+
+        return;
+    }
+
+
     try {
 
         await loadFaceModels();
 
 
-        status.textContent =
-            "Starting camera...";
+        if (status) {
+
+            status.innerHTML = `
+
+                <div class="inline-status info">
+
+                    <span
+                        class="inline-status-icon"
+                    >
+                        •
+                    </span>
+
+                    <span>
+                        Starting camera...
+                    </span>
+
+                </div>
+
+            `;
+        }
 
 
         const video =
@@ -1830,71 +3617,200 @@ async function captureStudentFace(
             );
 
 
-        status.textContent =
-            "Look at the camera...";
+        if (status) {
+
+            status.innerHTML = `
+
+                <div class="inline-status info">
+
+                    <span
+                        class="inline-status-icon"
+                    >
+                        •
+                    </span>
+
+                    <span>
+                        Keep exactly one face visible
+                        and look toward the camera.
+                    </span>
+
+                </div>
+
+            `;
+        }
 
 
         await new Promise(
             resolve =>
                 setTimeout(
                     resolve,
-                    1500
+                    1600
                 )
         );
 
 
-        const detections =
-            await faceapi
-                .detectAllFaces(
-                    video,
-
-                    new faceapi
-                        .TinyFaceDetectorOptions({
-                            inputSize: 320,
-                            scoreThreshold: 0.5
-                        })
-                )
-                .withFaceLandmarks()
-                .withFaceDescriptors();
+        const descriptors =
+            [];
 
 
-        if (
-            detections.length === 0
+        /*
+            Take several samples instead of
+            relying on one single camera frame.
+        */
+
+        for (
+            let attempt = 0;
+            attempt < 5;
+            attempt++
         ) {
 
-            status.innerHTML = `
-                <span style="color:#ff6b7a">
-                    No face detected.
-                </span>
-            `;
+            const detections =
+                await faceapi
+                    .detectAllFaces(
 
-            stopCamera();
+                        video,
 
-            return;
+                        new faceapi
+                            .TinyFaceDetectorOptions({
+
+                                inputSize:
+                                    320,
+
+                                scoreThreshold:
+                                    0.5
+                            })
+                    )
+                    .withFaceLandmarks()
+                    .withFaceDescriptors();
+
+
+            if (
+                detections.length > 1
+            ) {
+
+                stopCamera();
+
+
+                throw new Error(
+                    "More than one face detected. Keep one person at a time."
+                );
+            }
+
+
+            if (
+                detections.length === 1
+            ) {
+
+                descriptors.push(
+                    Array.from(
+                        detections[0]
+                            .descriptor
+                    )
+                );
+            }
+
+
+            if (
+                status
+            ) {
+
+                status.innerHTML = `
+
+                    <div class="inline-status info">
+
+                        <span
+                            class="inline-status-icon"
+                        >
+                            ${safe(
+                                descriptors.length
+                            )}
+                        </span>
+
+                        <span>
+                            Capturing face profile...
+                            ${safe(
+                                descriptors.length
+                            )}
+                            sample(s) captured.
+                        </span>
+
+                    </div>
+
+                `;
+            }
+
+
+            await new Promise(
+                resolve =>
+                    setTimeout(
+                        resolve,
+                        300
+                    )
+            );
         }
 
 
         if (
-            detections.length > 1
+            descriptors.length === 0
         ) {
-
-            status.innerHTML = `
-                <span style="color:#ff6b7a">
-                    More than one face detected.
-                    Keep one person at a time.
-                </span>
-            `;
 
             stopCamera();
 
-            return;
+
+            throw new Error(
+                "No clear face was detected. Face the camera and try again."
+            );
+        }
+
+
+        /*
+            Average the captured descriptors.
+        */
+
+        const length =
+            descriptors[0].length;
+
+
+        const average =
+            new Array(
+                length
+            ).fill(0);
+
+
+        descriptors.forEach(
+            descriptor => {
+
+                descriptor.forEach(
+                    (
+                        value,
+                        index
+                    ) => {
+
+                        average[index] +=
+                            value;
+                    }
+                );
+            }
+        );
+
+
+        for (
+            let index = 0;
+            index < average.length;
+            index++
+        ) {
+
+            average[index] /=
+                descriptors.length;
         }
 
 
         const studentResult =
             await db
                 .from("students")
-                .select("*")
+                .select(
+                    "student_id,name,class_name"
+                )
                 .eq(
                     "school_id",
                     S.school
@@ -1906,7 +3822,9 @@ async function captureStudentFace(
                 .maybeSingle();
 
 
-        if (studentResult.error) {
+        if (
+            studentResult.error
+        ) {
             throw studentResult.error;
         }
 
@@ -1923,28 +3841,24 @@ async function captureStudentFace(
         }
 
 
-        const descriptor =
-            Array.from(
-                detections[0].descriptor
-            );
-
-
         const saveResult =
             await db
                 .from("face_profiles")
                 .upsert(
+
                     {
+
                         school_id:
                             S.school,
 
                         student_id:
-                            studentId,
+                            student.student_id,
 
                         student_name:
                             student.name,
 
                         descriptor:
-                            descriptor
+                            average
                     },
 
                     {
@@ -1954,7 +3868,9 @@ async function captureStudentFace(
                 );
 
 
-        if (saveResult.error) {
+        if (
+            saveResult.error
+        ) {
             throw saveResult.error;
         }
 
@@ -1962,28 +3878,50 @@ async function captureStudentFace(
         stopCamera();
 
 
-        status.innerHTML = `
+        if (status) {
 
-            <span
-                style="
-                color:#4ade80;
-                font-weight:bold;
-                "
-            >
-                ✓ Face Registered
-            </span>
+            status.innerHTML = `
 
-            <br>
+                <div class="inline-status success">
 
-            ${safe(student.name)}
-            is ready for Smart Attendance.
-        `;
+                    <span
+                        class="inline-status-icon"
+                    >
+                        ✓
+                    </span>
+
+                    <span>
+
+                        <b>
+                            ${safe(
+                                student.name
+                            )}
+                        </b>
+
+                        is ready for
+                        Smart Attendance.
+
+                    </span>
+
+                </div>
+
+            `;
+        }
+
+
+        showToast(
+            "Smart Attendance profile registered.",
+            "success"
+        );
 
     }
 
     catch (error) {
 
-        console.error(error);
+        console.error(
+            error
+        );
+
 
         stopCamera();
 
@@ -1991,20 +3929,37 @@ async function captureStudentFace(
         if (status) {
 
             status.innerHTML = `
-                <span style="color:#ff6b7a">
-                    ${safe(
-                        error.message ||
-                        "Face registration failed."
-                    )}
-                </span>
+
+                <div class="inline-status error">
+
+                    <span
+                        class="inline-status-icon"
+                    >
+                        !
+                    </span>
+
+                    <span>
+                        ${safe(
+                            error?.message ||
+                            "Face registration failed."
+                        )}
+                    </span>
+
+                </div>
+
             `;
         }
+
+
+        showToast(
+            error?.message ||
+            "Face registration failed.",
+            "error"
+        );
     }
 }
-
-
 /* =========================================================
-   TEACHERS
+   TEACHERS PAGE
 ========================================================= */
 
 async function teachersPage() {
@@ -2015,16 +3970,34 @@ async function teachersPage() {
     ) {
 
         $("#page").innerHTML = `
+
             <div class="box">
-                School Admin access required.
+
+                ${emptyState(
+                    "Access Restricted",
+                    "Only the School Admin can manage teacher accounts."
+                )}
+
             </div>
+
         `;
 
         return;
     }
 
 
-    const result =
+    if (!db) {
+
+        throw new Error(
+            "Database is not configured."
+        );
+    }
+
+
+    const {
+        data,
+        error
+    } =
         await db
             .from("teachers")
             .select("*")
@@ -2040,13 +4013,15 @@ async function teachersPage() {
             );
 
 
-    if (result.error) {
-        throw result.error;
+    if (error) {
+        throw error;
     }
 
 
     const teachers =
-        result.data || [];
+        Array.isArray(data)
+            ? data
+            : [];
 
 
     $("#page").innerHTML = `
@@ -2057,25 +4032,38 @@ async function teachersPage() {
                 Add Teacher
             </h3>
 
+            <p class="muted">
+                Create a teacher account for
+                this school.
+            </p>
+
+
             <div class="tools">
 
                 <input
                     id="teacherId"
                     placeholder="Teacher ID"
+                    autocomplete="off"
                 >
+
 
                 <input
                     id="teacherName"
                     placeholder="Teacher Name"
+                    autocomplete="off"
                 >
+
 
                 <input
                     id="teacherPassword"
                     type="password"
                     placeholder="Password"
+                    autocomplete="new-password"
                 >
 
+
                 <button
+                    class="no-zoom"
                     onclick="addTeacher()"
                 >
                     Add Teacher
@@ -2086,49 +4074,202 @@ async function teachersPage() {
         </div>
 
 
-        <div class="table">
+        <div
+            class="box"
+            style="margin-top:18px"
+        >
 
-            <table>
+            <div
+                style="
+                    display:flex;
+                    align-items:center;
+                    justify-content:space-between;
+                    gap:12px;
+                    flex-wrap:wrap;
+                "
+            >
 
-                <tr>
-                    <th>Teacher ID</th>
-                    <th>Name</th>
-                    <th>Status</th>
-                </tr>
+                <div>
+
+                    <h3
+                        style="margin-bottom:4px"
+                    >
+                        Teacher Directory
+                    </h3>
+
+                    <span class="muted">
+                        ${safe(teachers.length)}
+                        teacher
+                        ${
+                            teachers.length === 1
+                                ? ""
+                                : "s"
+                        }
+                    </span>
+
+                </div>
+
+            </div>
 
 
-                ${teachers.map(teacher => `
+            ${renderSearchBar(
+                "teacherSearch",
+                "Search teachers..."
+            )}
 
-                    <tr>
 
-                        <td>
-                            ${safe(
-                                teacher.teacher_id
-                            )}
-                        </td>
+            ${
+                teachers.length
 
-                        <td>
-                            ${safe(
-                                teacher.teacher_name
-                            )}
-                        </td>
+                    ? `
 
-                        <td>
-                            ${
-                                teacher.enabled
-                                    ? "Active"
-                                    : "Disabled"
-                            }
-                        </td>
+                    <div
+                        class="table"
+                        id="teachersTable"
+                    >
 
-                    </tr>
+                        <table>
 
-                `).join("")}
+                            <thead>
 
-            </table>
+                                <tr>
+
+                                    <th>
+                                        Teacher ID
+                                    </th>
+
+                                    <th>
+                                        Name
+                                    </th>
+
+                                    <th>
+                                        Status
+                                    </th>
+
+                                    <th>
+                                        Action
+                                    </th>
+
+                                </tr>
+
+                            </thead>
+
+
+                            <tbody>
+
+                                ${teachers.map(
+                                    teacher => `
+
+                                        <tr
+                                            data-search-item
+                                        >
+
+                                            <td>
+                                                ${safe(
+                                                    teacher.teacher_id
+                                                )}
+                                            </td>
+
+
+                                            <td>
+                                                <b>
+                                                    ${safe(
+                                                        teacher.teacher_name
+                                                    )}
+                                                </b>
+                                            </td>
+
+
+                                            <td>
+
+                                                ${
+                                                    teacher.enabled !== false
+
+                                                        ? `
+
+                                                        <span
+                                                            style="
+                                                                color:#5ad4a4;
+                                                                font-weight:700;
+                                                            "
+                                                        >
+                                                            ● Active
+                                                        </span>
+
+                                                        `
+
+                                                        : `
+
+                                                        <span
+                                                            style="
+                                                                color:#ff7d8d;
+                                                                font-weight:700;
+                                                            "
+                                                        >
+                                                            ● Disabled
+                                                        </span>
+
+                                                        `
+                                                }
+
+                                            </td>
+
+
+                                            <td>
+
+                                                <button
+                                                    class="small-button no-zoom"
+                                                    onclick="toggleTeacher(
+                                                        '${safe(
+                                                            teacher.teacher_id
+                                                        )}',
+                                                        ${
+                                                            teacher.enabled !==
+                                                            false
+                                                        }
+                                                    )"
+                                                >
+
+                                                    ${
+                                                        teacher.enabled !== false
+                                                            ? "Disable"
+                                                            : "Enable"
+                                                    }
+
+                                                </button>
+
+                                            </td>
+
+                                        </tr>
+
+                                    `
+                                ).join("")}
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
+
+                    `
+
+                    :
+
+                    emptyState(
+                        "No teachers yet",
+                        "Add your first teacher using the form above."
+                    )
+            }
 
         </div>
+
     `;
+
+
+    bindSimpleSearch(
+        "teacherSearch",
+        "#teachersTable"
+    );
 }
 
 
@@ -2138,26 +4279,85 @@ async function teachersPage() {
 
 async function addTeacher() {
 
+    if (
+        S.role !==
+        "School Admin"
+    ) {
+
+        showToast(
+            "School Admin access required.",
+            "error"
+        );
+
+        return;
+    }
+
+
+    const teacherId =
+        $("#teacherId")
+            ?.value
+            .trim();
+
+
+    const teacherName =
+        $("#teacherName")
+            ?.value
+            .trim();
+
+
+    const password =
+        $("#teacherPassword")
+            ?.value || "";
+
+
+    if (
+        !teacherId ||
+        !teacherName ||
+        !password
+    ) {
+
+        showToast(
+            "Fill in all teacher fields.",
+            "error"
+        );
+
+        return;
+    }
+
+
     try {
 
-        const id =
-            $("#teacherId").value.trim();
-
-        const name =
-            $("#teacherName").value.trim();
-
-        const password =
-            $("#teacherPassword").value;
+        const existing =
+            await db
+                .from("teachers")
+                .select(
+                    "teacher_id"
+                )
+                .eq(
+                    "school_id",
+                    S.school
+                )
+                .eq(
+                    "teacher_id",
+                    teacherId
+                )
+                .maybeSingle();
 
 
         if (
-            !id ||
-            !name ||
-            !password
+            existing.error
+        ) {
+            throw existing.error;
+        }
+
+
+        if (
+            existing.data
         ) {
 
-            alert(
-                "Fill in all teacher fields."
+            showToast(
+                "That Teacher ID already exists.",
+                "error"
             );
 
             return;
@@ -2168,39 +4368,127 @@ async function addTeacher() {
             await db
                 .from("teachers")
                 .insert({
+
                     school_id:
                         S.school,
 
                     teacher_id:
-                        id,
+                        teacherId,
 
                     teacher_name:
-                        name,
+                        teacherName,
 
                     password_hash:
-                        await hash(password),
+                        await hash(
+                            password
+                        ),
 
                     enabled:
                         true
                 });
 
 
-        if (result.error) {
+        if (
+            result.error
+        ) {
             throw result.error;
         }
 
 
-        alert("Teacher added.");
+        showToast(
+            `${teacherName} added successfully.`,
+            "success"
+        );
 
-        teachersPage();
+
+        await teachersPage();
 
     }
 
     catch (error) {
 
-        alert(
-            error.message ||
-            "Could not add teacher."
+        console.error(
+            error
+        );
+
+
+        showToast(
+            error?.message ||
+            "Could not add teacher.",
+            "error"
+        );
+    }
+}
+
+
+/* =========================================================
+   ENABLE / DISABLE TEACHER
+========================================================= */
+
+async function toggleTeacher(
+    teacherId,
+    currentlyEnabled
+) {
+
+    if (
+        S.role !==
+        "School Admin"
+    ) {
+        return;
+    }
+
+
+    try {
+
+        const result =
+            await db
+                .from("teachers")
+                .update({
+
+                    enabled:
+                        !currentlyEnabled
+
+                })
+                .eq(
+                    "school_id",
+                    S.school
+                )
+                .eq(
+                    "teacher_id",
+                    teacherId
+                );
+
+
+        if (
+            result.error
+        ) {
+            throw result.error;
+        }
+
+
+        showToast(
+            currentlyEnabled
+                ? "Teacher disabled."
+                : "Teacher enabled.",
+            "success"
+        );
+
+
+        await teachersPage();
+
+    }
+
+    catch (error) {
+
+        console.error(
+            error
+        );
+
+
+        showToast(
+            error?.message ||
+            "Could not update teacher.",
+            "error"
         );
     }
 }
@@ -2216,95 +4504,258 @@ function attendancePage() {
 
         <div class="box">
 
+            <div
+                style="
+                    display:flex;
+                    justify-content:space-between;
+                    gap:15px;
+                    align-items:center;
+                    flex-wrap:wrap;
+                "
+            >
+
+                <div>
+
+                    <h3>
+                        Smart Attendance
+                    </h3>
+
+                    <p class="muted">
+                        Fast classroom attendance
+                        using registered Smart
+                        Attendance profiles.
+                    </p>
+
+                </div>
+
+
+                <span
+                    style="
+                        color:#5ad4a4;
+                        font-weight:700;
+                    "
+                >
+                    ● Ready
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <div
+            class="box"
+            style="margin-top:18px"
+        >
+
             <h3>
-                Smart Attendance
+                Live Attendance
             </h3>
 
+
             <p class="muted">
-                Start the camera and place one
-                registered demo participant in
-                front of it.
+                Keep exactly one registered
+                participant visible in the camera.
             </p>
 
+
+            <div
+                id="attendanceCamera"
+                class="camera"
+            >
+                Live Classroom
+            </div>
+
+
+            <div class="tools">
+
+                <button
+                    class="no-zoom"
+                    onclick="startSmartAttendance()"
+                >
+                    Start Automatic Attendance
+                </button>
+
+
+                <button
+                    class="secondary-button no-zoom"
+                    onclick="stopSmartAttendance()"
+                >
+                    Stop Camera
+                </button>
+
+            </div>
+
+
+            <div
+                id="faceStatus"
+                style="margin-top:16px"
+            >
+
+                <div
+                    class="inline-status info"
+                >
+
+                    <span
+                        class="inline-status-icon"
+                    >
+                        i
+                    </span>
+
+                    <span>
+                        Camera is off.
+                    </span>
+
+                </div>
+
+            </div>
+
         </div>
 
 
         <div
-            id="attendanceCamera"
-            class="camera"
-        >
-            Smart Attendance Camera
-        </div>
-
-
-        <div class="tools">
-
-            <button
-                onclick="startSmartAttendance()"
-            >
-                Start Automatic Attendance
-            </button>
-
-            <button
-                onclick="stopSmartAttendance()"
-            >
-                Stop Camera
-            </button>
-
-        </div>
-
-
-        <div
-            id="faceStatus"
             class="box"
+            style="margin-top:18px"
         >
-            Camera is off.
+
+            <h3>
+                How it works
+            </h3>
+
+
+            <div
+                style="
+                    display:grid;
+                    gap:12px;
+                    margin-top:12px;
+                "
+            >
+
+                <div
+                    class="inline-status success"
+                >
+
+                    <span
+                        class="inline-status-icon"
+                    >
+                        ✓
+                    </span>
+
+                    <span>
+                        Registered participant:
+                        recognized and automatically
+                        marked Present.
+                    </span>
+
+                </div>
+
+
+                <div
+                    class="inline-status error"
+                >
+
+                    <span
+                        class="inline-status-icon"
+                    >
+                        !
+                    </span>
+
+                    <span>
+                        Unrecognized face:
+                        shown as UNKNOWN and no
+                        attendance is recorded.
+                    </span>
+
+                </div>
+
+
+                <div
+                    class="inline-status info"
+                >
+
+                    <span
+                        class="inline-status-icon"
+                    >
+                        1
+                    </span>
+
+                    <span>
+                        If multiple faces are visible,
+                        EduVision asks for one person
+                        at a time.
+                    </span>
+
+                </div>
+
+
+                <div
+                    class="inline-status info"
+                >
+
+                    <span
+                        class="inline-status-icon"
+                    >
+                        ✓
+                    </span>
+
+                    <span>
+                        The same student cannot receive
+                        duplicate attendance for the
+                        same day.
+                    </span>
+
+                </div>
+
+            </div>
+
         </div>
 
 
-        <div class="box">
+        <div
+            class="inline-status info"
+            style="margin-top:18px"
+        >
 
-            <b>
-                Automatic Mode
-            </b>
+            <span
+                class="inline-status-icon"
+            >
+                i
+            </span>
 
-            <p class="muted">
-
-                🟢 Registered profile:
-                recognized and marked Present.
-
-                <br><br>
-
-                🔴 Unregistered face:
-                UNKNOWN.
-
-                <br><br>
-
-                Multiple faces:
-                one person at a time.
-
-                <br><br>
-
-                Attendance is not duplicated
-                for the same person on the
-                same day.
-
-            </p>
+            <span>
+                Smart Attendance should only be used
+                with participants whose profiles were
+                registered with appropriate permission.
+            </span>
 
         </div>
+
     `;
 }
 
 
 /* =========================================================
-   FACE MATCHER
+   BUILD FACE MATCHER
 ========================================================= */
 
 async function buildFaceMatcher() {
 
-    const result =
+    if (!db) {
+
+        throw new Error(
+            "Database is not configured."
+        );
+    }
+
+
+    const {
+        data,
+        error
+    } =
         await db
-            .from("face_profiles")
+            .from(
+                "face_profiles"
+            )
             .select("*")
             .eq(
                 "school_id",
@@ -2312,50 +4763,79 @@ async function buildFaceMatcher() {
             );
 
 
-    if (result.error) {
-        throw result.error;
+    if (error) {
+        throw error;
     }
 
 
     const profiles =
-        result.data || [];
+        Array.isArray(data)
+            ? data
+            : [];
+
+
+    const validProfiles =
+        profiles.filter(
+            profile =>
+                profile.student_id &&
+                Array.isArray(
+                    profile.descriptor
+                ) &&
+                profile.descriptor.length > 0
+        );
 
 
     if (
-        profiles.length === 0
+        validProfiles.length === 0
     ) {
 
         throw new Error(
-            "No face profiles are registered. Go to Students → Register Face first."
+            "No Smart Attendance profiles are registered. Go to Students → Register Face first."
         );
     }
 
 
     const labels =
-        profiles.map(profile => {
+        validProfiles.map(
+            profile => {
 
-            const descriptor =
-                new Float32Array(
-                    profile.descriptor
-                );
-
-
-            return new faceapi
-                .LabeledFaceDescriptors(
-
-                    profile.student_id +
-                    "|" +
-                    profile.student_name,
-
-                    [descriptor]
-                );
-        });
+                const descriptor =
+                    new Float32Array(
+                        profile.descriptor
+                    );
 
 
-    return new faceapi.FaceMatcher(
-        labels,
-        0.52
-    );
+                return new faceapi
+                    .LabeledFaceDescriptors(
+
+                        String(
+                            profile.student_id
+                        ) +
+                        "|" +
+                        String(
+                            profile.student_name ||
+                            "Student"
+                        ),
+
+                        [
+                            descriptor
+                        ]
+                    );
+            }
+        );
+
+
+    /*
+        Smaller threshold = stricter matching.
+        0.50 is intentionally conservative
+        for the school demo.
+    */
+
+    return new faceapi
+        .FaceMatcher(
+            labels,
+            0.50
+        );
 }
 
 
@@ -2369,13 +4849,35 @@ async function startSmartAttendance() {
         $("#faceStatus");
 
 
+    if (!status) {
+        return;
+    }
+
+
     try {
 
         stopCamera();
 
 
-        status.textContent =
-            "Loading Smart Attendance...";
+        status.innerHTML = `
+
+            <div
+                class="inline-status info"
+            >
+
+                <span
+                    class="inline-status-icon"
+                >
+                    AI
+                </span>
+
+                <span>
+                    Loading Smart Attendance...
+                </span>
+
+            </div>
+
+        `;
 
 
         await loadFaceModels();
@@ -2385,8 +4887,25 @@ async function startSmartAttendance() {
             await buildFaceMatcher();
 
 
-        status.textContent =
-            "Starting camera...";
+        status.innerHTML = `
+
+            <div
+                class="inline-status info"
+            >
+
+                <span
+                    class="inline-status-icon"
+                >
+                    •
+                </span>
+
+                <span>
+                    Starting camera...
+                </span>
+
+            </div>
+
+        `;
 
 
         const video =
@@ -2399,16 +4918,35 @@ async function startSmartAttendance() {
             $("#attendanceCameraCanvas");
 
 
-        status.textContent =
-            "Scanning — one person at a time.";
+        status.innerHTML = `
+
+            <div
+                class="inline-status success"
+            >
+
+                <span
+                    class="inline-status-icon"
+                >
+                    ●
+                </span>
+
+                <span>
+                    Scanning — one person at a time.
+                </span>
+
+            </div>
+
+        `;
 
 
         attendanceTimer =
             setInterval(
+
                 async () => {
 
                     if (
                         attendanceBusy ||
+                        !cameraStream ||
                         !video ||
                         video.readyState < 2
                     ) {
@@ -2416,7 +4954,8 @@ async function startSmartAttendance() {
                     }
 
 
-                    attendanceBusy = true;
+                    attendanceBusy =
+                        true;
 
 
                     try {
@@ -2429,62 +4968,103 @@ async function startSmartAttendance() {
 
                                     new faceapi
                                         .TinyFaceDetectorOptions({
-                                            inputSize: 320,
-                                            scoreThreshold: 0.5
+
+                                            inputSize:
+                                                320,
+
+                                            scoreThreshold:
+                                                0.5
                                         })
                                 )
                                 .withFaceLandmarks()
                                 .withFaceDescriptors();
 
 
-                        prepareCanvas(
-                            canvas,
-                            video
-                        );
+                        if (
+                            canvas
+                        ) {
 
-
-                        const ctx =
-                            canvas.getContext(
-                                "2d"
+                            prepareCanvas(
+                                canvas,
+                                video
                             );
 
 
-                        ctx.clearRect(
-                            0,
-                            0,
-                            canvas.width,
-                            canvas.height
-                        );
+                            const context =
+                                canvas.getContext(
+                                    "2d"
+                                );
 
+
+                            context.clearRect(
+                                0,
+                                0,
+                                canvas.width,
+                                canvas.height
+                            );
+                        }
+
+
+                        /* -------------------------
+                           NO FACE
+                        ------------------------- */
 
                         if (
                             detections.length === 0
                         ) {
 
                             status.innerHTML = `
-                                <span class="muted">
-                                    No face detected.
-                                </span>
+
+                                <div
+                                    class="inline-status info"
+                                >
+
+                                    <span
+                                        class="inline-status-icon"
+                                    >
+                                        •
+                                    </span>
+
+                                    <span>
+                                        No face detected.
+                                    </span>
+
+                                </div>
+
                             `;
 
                             return;
                         }
 
 
+                        /* -------------------------
+                           MULTIPLE FACES
+                        ------------------------- */
+
                         if (
                             detections.length > 1
                         ) {
 
                             status.innerHTML = `
-                                <span
-                                    style="
-                                    color:#ff6b7a;
-                                    font-weight:bold;
-                                    "
+
+                                <div
+                                    class="inline-status error"
                                 >
-                                    ONE PERSON AT A TIME
-                                </span>
+
+                                    <span
+                                        class="inline-status-icon"
+                                    >
+                                        !
+                                    </span>
+
+                                    <span>
+                                        ONE PERSON AT A TIME
+                                    </span>
+
+                                </div>
+
                             `;
+
 
                             return;
                         }
@@ -2505,79 +5085,153 @@ async function startSmartAttendance() {
                             "unknown";
 
 
+                        const context =
+                            canvas
+                                ? canvas.getContext(
+                                    "2d"
+                                )
+                                : null;
+
+
+                        /* -------------------------
+                           UNKNOWN FACE
+                        ------------------------- */
+
                         if (!known) {
 
-                            drawDetectionBox(
-                                ctx,
-                                detection.detection.box,
-                                "UNKNOWN",
-                                "#ff536c"
-                            );
+                            if (
+                                context
+                            ) {
+
+                                drawDetectionBox(
+
+                                    context,
+
+                                    detection
+                                        .detection
+                                        .box,
+
+                                    "UNKNOWN",
+
+                                    "#ff536c"
+                                );
+                            }
 
 
                             status.innerHTML = `
-                                <span
-                                    style="
-                                    color:#ff536c;
-                                    font-size:20px;
-                                    font-weight:bold;
-                                    "
+
+                                <div
+                                    class="inline-status error"
                                 >
-                                    🔴 UNKNOWN
-                                </span>
+
+                                    <span
+                                        class="inline-status-icon"
+                                    >
+                                        !
+                                    </span>
+
+                                    <span>
+
+                                        <b>
+                                            UNKNOWN
+                                        </b>
+
+                                        <br>
+
+                                        No attendance recorded.
+
+                                    </span>
+
+                                </div>
+
                             `;
+
 
                             return;
                         }
 
 
+                        /* -------------------------
+                           KNOWN FACE
+                        ------------------------- */
+
                         const parts =
-                            best.label.split("|");
+                            best.label.split(
+                                "|"
+                            );
 
 
                         const studentId =
                             parts.shift();
 
 
-                        const name =
+                        const studentName =
                             parts.join("|");
 
 
-                        drawDetectionBox(
-                            ctx,
-                            detection.detection.box,
-                            name,
-                            "#4ade80"
-                        );
+                        if (
+                            context
+                        ) {
+
+                            drawDetectionBox(
+
+                                context,
+
+                                detection
+                                    .detection
+                                    .box,
+
+                                studentName,
+
+                                "#4ade80"
+                            );
+                        }
 
 
                         status.innerHTML = `
-                            <span
-                                style="
-                                color:#4ade80;
-                                font-size:20px;
-                                font-weight:bold;
-                                "
+
+                            <div
+                                class="inline-status success"
                             >
-                                🟢 ${safe(name)}
-                            </span>
 
-                            <br>
+                                <span
+                                    class="inline-status-icon"
+                                >
+                                    ✓
+                                </span>
 
-                            Recognized.
+                                <span>
+
+                                    <b>
+                                        ${safe(
+                                            studentName
+                                        )}
+                                    </b>
+
+                                    <br>
+
+                                    Recognized.
+
+                                </span>
+
+                            </div>
+
                         `;
 
 
                         await saveAutomaticAttendance(
                             studentId,
-                            name
+                            studentName
                         );
 
                     }
 
                     catch (error) {
 
-                        console.error(error);
+                        console.error(
+                            "Attendance scan error:",
+                            error
+                        );
 
                     }
 
@@ -2596,30 +5250,49 @@ async function startSmartAttendance() {
 
     catch (error) {
 
-        console.error(error);
+        console.error(
+            error
+        );
+
 
         stopCamera();
 
 
         status.innerHTML = `
-            <span
-                style="
-                color:#ff6b7a;
-                font-weight:bold;
-                "
+
+            <div
+                class="inline-status error"
             >
-                ${safe(
-                    error.message ||
-                    "Smart Attendance failed."
-                )}
-            </span>
+
+                <span
+                    class="inline-status-icon"
+                >
+                    !
+                </span>
+
+                <span>
+                    ${safe(
+                        error?.message ||
+                        "Smart Attendance could not start."
+                    )}
+                </span>
+
+            </div>
+
         `;
+
+
+        showToast(
+            error?.message ||
+            "Smart Attendance could not start.",
+            "error"
+        );
     }
 }
 
 
 /* =========================================================
-   CANVAS
+   PREPARE CAMERA CANVAS
 ========================================================= */
 
 function prepareCanvas(
@@ -2628,9 +5301,18 @@ function prepareCanvas(
 ) {
 
     if (
+        !canvas ||
+        !video
+    ) {
+        return;
+    }
+
+
+    if (
         canvas.width !==
         video.videoWidth
     ) {
+
         canvas.width =
             video.videoWidth;
     }
@@ -2640,27 +5322,40 @@ function prepareCanvas(
         canvas.height !==
         video.videoHeight
     ) {
+
         canvas.height =
             video.videoHeight;
     }
 }
 
 
+/* =========================================================
+   DRAW FACE DETECTION BOX
+========================================================= */
+
 function drawDetectionBox(
-    ctx,
+    context,
     box,
     label,
     colour
 ) {
 
-    ctx.strokeStyle =
+    if (
+        !context ||
+        !box
+    ) {
+        return;
+    }
+
+
+    context.strokeStyle =
         colour;
 
-    ctx.lineWidth =
+    context.lineWidth =
         5;
 
 
-    ctx.strokeRect(
+    context.strokeRect(
         box.x,
         box.y,
         box.width,
@@ -2668,13 +5363,20 @@ function drawDetectionBox(
     );
 
 
-    ctx.font =
-        "bold 22px Arial";
+    context.font =
+        "bold 20px Arial";
+
+
+    const labelText =
+        String(
+            label ||
+            ""
+        );
 
 
     const width =
-        ctx.measureText(
-            label
+        context.measureText(
+            labelText
         ).width + 20;
 
 
@@ -2685,11 +5387,11 @@ function drawDetectionBox(
         );
 
 
-    ctx.fillStyle =
+    context.fillStyle =
         colour;
 
 
-    ctx.fillRect(
+    context.fillRect(
         box.x,
         y,
         width,
@@ -2697,20 +5399,20 @@ function drawDetectionBox(
     );
 
 
-    ctx.fillStyle =
+    context.fillStyle =
         "#06101d";
 
 
-    ctx.fillText(
-        label,
+    context.fillText(
+        labelText,
         box.x + 10,
-        y + 24
+        y + 23
     );
 }
 
 
 /* =========================================================
-   AUTOMATIC ATTENDANCE SAVE
+   SAVE AUTOMATIC ATTENDANCE
 ========================================================= */
 
 async function saveAutomaticAttendance(
@@ -2718,11 +5420,19 @@ async function saveAutomaticAttendance(
     studentName
 ) {
 
+    if (
+        !db ||
+        !S?.school
+    ) {
+        return;
+    }
+
+
     const date =
         localDate();
 
 
-    const key =
+    const attendanceKey =
         `${S.school}|${studentId}|${date}`;
 
 
@@ -2730,37 +5440,71 @@ async function saveAutomaticAttendance(
         $("#faceStatus");
 
 
+    /*
+        First check the local session.
+        This reduces unnecessary database
+        requests while the same student
+        remains in front of the camera.
+    */
+
     if (
-        markedThisSession.has(key)
+        markedThisSession.has(
+            attendanceKey
+        )
     ) {
 
-        if (status) {
+        if (
+            status
+        ) {
 
             status.innerHTML = `
-                <span
-                    style="
-                    color:#4ade80;
-                    font-size:20px;
-                    font-weight:bold;
-                    "
+
+                <div
+                    class="inline-status success"
                 >
-                    🟢 ${safe(studentName)}
-                </span>
 
-                <br>
+                    <span
+                        class="inline-status-icon"
+                    >
+                        ✓
+                    </span>
 
-                ✓ Attendance already recorded today.
+                    <span>
+
+                        <b>
+                            ${safe(
+                                studentName
+                            )}
+                        </b>
+
+                        <br>
+
+                        Attendance already recorded today.
+
+                    </span>
+
+                </div>
+
             `;
         }
+
 
         return;
     }
 
 
+    /* =====================================================
+       CHECK DATABASE FOR TODAY'S RECORD
+    ===================================================== */
+
     const existing =
         await db
-            .from("attendance")
-            .select("id")
+            .from(
+                "attendance"
+            )
+            .select(
+                "id,status"
+            )
             .eq(
                 "school_id",
                 S.school
@@ -2776,43 +5520,74 @@ async function saveAutomaticAttendance(
             .maybeSingle();
 
 
-    if (existing.error) {
+    if (
+        existing.error
+    ) {
         throw existing.error;
     }
 
 
-    if (existing.data) {
+    if (
+        existing.data
+    ) {
 
-        markedThisSession.add(key);
+        markedThisSession.add(
+            attendanceKey
+        );
 
 
-        if (status) {
+        if (
+            status
+        ) {
 
             status.innerHTML = `
-                <span
-                    style="
-                    color:#4ade80;
-                    font-size:20px;
-                    font-weight:bold;
-                    "
+
+                <div
+                    class="inline-status success"
                 >
-                    🟢 ${safe(studentName)}
-                </span>
 
-                <br>
+                    <span
+                        class="inline-status-icon"
+                    >
+                        ✓
+                    </span>
 
-                ✓ Attendance already recorded today.
+                    <span>
+
+                        <b>
+                            ${safe(
+                                studentName
+                            )}
+                        </b>
+
+                        <br>
+
+                        Attendance already recorded today.
+
+                    </span>
+
+                </div>
+
             `;
         }
+
 
         return;
     }
 
 
+    /* =====================================================
+       LOAD STUDENT
+    ===================================================== */
+
     const studentResult =
         await db
-            .from("students")
-            .select("*")
+            .from(
+                "students"
+            )
+            .select(
+                "student_id,name,class_name,status"
+            )
             .eq(
                 "school_id",
                 S.school
@@ -2824,7 +5599,9 @@ async function saveAutomaticAttendance(
             .maybeSingle();
 
 
-    if (studentResult.error) {
+    if (
+        studentResult.error
+    ) {
         throw studentResult.error;
     }
 
@@ -2834,18 +5611,63 @@ async function saveAutomaticAttendance(
 
 
     if (!student) {
+
+        throw new Error(
+            "Recognized student could not be found."
+        );
+    }
+
+
+    if (
+        student.status !==
+        "Active"
+    ) {
+
+        if (
+            status
+        ) {
+
+            status.innerHTML = `
+
+                <div
+                    class="inline-status error"
+                >
+
+                    <span
+                        class="inline-status-icon"
+                    >
+                        !
+                    </span>
+
+                    <span>
+                        This student is not active.
+                    </span>
+
+                </div>
+
+            `;
+        }
+
+
         return;
     }
 
+
+    /* =====================================================
+       SAVE PRESENT
+    ===================================================== */
 
     const now =
         new Date();
 
 
-    const save =
+    const saveResult =
         await db
-            .from("attendance")
+            .from(
+                "attendance"
+            )
             .insert({
+
                 school_id:
                     S.school,
 
@@ -2869,42 +5691,100 @@ async function saveAutomaticAttendance(
             });
 
 
-    if (save.error) {
+    /*
+        If two scans happen extremely close
+        together, the database unique rule
+        may reject the second one. In that
+        case we verify whether the record
+        already exists instead of showing
+        a false failure.
+    */
 
-        console.error(
-            save.error
-        );
+    if (
+        saveResult.error
+    ) {
 
-        return;
+        const check =
+            await db
+                .from(
+                    "attendance"
+                )
+                .select("id")
+                .eq(
+                    "school_id",
+                    S.school
+                )
+                .eq(
+                    "student_id",
+                    student.student_id
+                )
+                .eq(
+                    "attendance_date",
+                    date
+                )
+                .maybeSingle();
+
+
+        if (
+            check.error ||
+            !check.data
+        ) {
+
+            throw saveResult.error;
+        }
     }
 
 
-    markedThisSession.add(key);
+    markedThisSession.add(
+        attendanceKey
+    );
 
 
-    if (status) {
+    if (
+        status
+    ) {
 
         status.innerHTML = `
-            <span
-                style="
-                color:#4ade80;
-                font-size:20px;
-                font-weight:bold;
-                "
+
+            <div
+                class="inline-status success"
             >
-                🟢 ${safe(student.name)}
-            </span>
 
-            <br>
+                <span
+                    class="inline-status-icon"
+                >
+                    ✓
+                </span>
 
-            ✓ Present automatically saved.
+                <span>
+
+                    <b>
+                        ${safe(
+                            student.name
+                        )}
+                    </b>
+
+                    <br>
+
+                    Present automatically saved.
+
+                </span>
+
+            </div>
+
         `;
     }
+
+
+    showToast(
+        `${student.name} marked Present.`,
+        "success"
+    );
 }
 
 
 /* =========================================================
-   STOP ATTENDANCE
+   STOP SMART ATTENDANCE
 ========================================================= */
 
 function stopSmartAttendance() {
@@ -2916,13 +5796,31 @@ function stopSmartAttendance() {
         $("#faceStatus");
 
 
-    if (status) {
-        status.textContent =
-            "Camera stopped.";
+    if (
+        status
+    ) {
+
+        status.innerHTML = `
+
+            <div
+                class="inline-status info"
+            >
+
+                <span
+                    class="inline-status-icon"
+                >
+                    i
+                </span>
+
+                <span>
+                    Camera stopped.
+                </span>
+
+            </div>
+
+        `;
     }
 }
-
-
 /* =========================================================
    SMART OCCUPANCY PAGE
 ========================================================= */
@@ -2933,46 +5831,87 @@ function occupancyPage() {
 
         <div class="box">
 
-            <h3>
-                Smart Occupancy
-            </h3>
+            <div
+                style="
+                    display:flex;
+                    justify-content:space-between;
+                    gap:15px;
+                    align-items:center;
+                    flex-wrap:wrap;
+                "
+            >
 
-            <p class="muted">
-                Automatically detects people
-                visible in the classroom camera
-                and shows the live occupancy.
-            </p>
+                <div>
+
+                    <h3>
+                        Smart Occupancy
+                    </h3>
+
+                    <p class="muted">
+                        Live classroom occupancy
+                        monitoring using the camera.
+                    </p>
+
+                </div>
+
+                <span
+                    style="
+                        color:#5ad4a4;
+                        font-weight:700;
+                    "
+                >
+                    ● Ready
+                </span>
+
+            </div>
 
         </div>
 
 
         <div
-            id="occupancyCamera"
-            class="camera"
+            class="box"
+            style="margin-top:18px"
         >
-            Live Classroom
+
+            <h3>
+                Live Classroom
+            </h3>
+
+
+            <div
+                id="occupancyCamera"
+                class="camera"
+            >
+                Camera is off
+            </div>
+
+
+            <div class="tools">
+
+                <button
+                    class="no-zoom"
+                    onclick="startSmartOccupancy()"
+                >
+                    Start Smart Occupancy
+                </button>
+
+
+                <button
+                    class="secondary-button no-zoom"
+                    onclick="stopSmartOccupancy()"
+                >
+                    Stop Camera
+                </button>
+
+            </div>
+
         </div>
 
 
-        <div class="tools">
-
-            <button
-                onclick="startSmartOccupancy()"
-            >
-                Start Smart Occupancy
-            </button>
-
-
-            <button
-                onclick="stopSmartOccupancy()"
-            >
-                Stop Camera
-            </button>
-
-        </div>
-
-
-        <div class="stats">
+        <div
+            class="stats"
+            style="margin-top:18px"
+        >
 
             <div class="box">
 
@@ -3004,22 +5943,39 @@ function occupancyPage() {
 
         <div
             id="occupancyStatus"
-            class="box"
-            style="margin-top:15px"
+            style="margin-top:18px"
         >
-            Camera is off.
+
+            <div class="inline-status info">
+
+                <span
+                    class="inline-status-icon"
+                >
+                    i
+                </span>
+
+                <span>
+                    Camera is off.
+                </span>
+
+            </div>
+
         </div>
+
     `;
 }
 
 
 /* =========================================================
-   LOAD OCCUPANCY AI
+   LOAD OCCUPANCY MODEL
 ========================================================= */
 
 async function loadOccupancyModel() {
 
-    if (occupancyModel) {
+    if (
+        occupancyModel
+    ) {
+
         return occupancyModel;
     }
 
@@ -3029,7 +5985,7 @@ async function loadOccupancyModel() {
     ) {
 
         throw new Error(
-            "Smart Occupancy AI library did not load."
+            "Smart Occupancy library did not load."
         );
     }
 
@@ -3040,14 +5996,30 @@ async function loadOccupancyModel() {
 
     if (status) {
 
-        status.textContent =
-            "Loading person detection AI...";
+        status.innerHTML = `
+
+            <div class="inline-status info">
+
+                <span
+                    class="inline-status-icon"
+                >
+                    AI
+                </span>
+
+                <span>
+                    Loading Smart Occupancy...
+                </span>
+
+            </div>
+
+        `;
     }
 
 
     occupancyModel =
         await cocoSsd.load({
-            base: "lite_mobilenet_v2"
+            base:
+                "lite_mobilenet_v2"
         });
 
 
@@ -3065,6 +6037,10 @@ async function startSmartOccupancy() {
         $("#occupancyStatus");
 
 
+    const state =
+        $("#occupancyState");
+
+
     try {
 
         stopCamera();
@@ -3072,20 +6048,28 @@ async function startSmartOccupancy() {
 
         if (status) {
 
-            status.textContent =
-                "Loading Smart Occupancy...";
+            status.innerHTML = `
+
+                <div class="inline-status info">
+
+                    <span
+                        class="inline-status-icon"
+                    >
+                        AI
+                    </span>
+
+                    <span>
+                        Preparing Smart Occupancy...
+                    </span>
+
+                </div>
+
+            `;
         }
 
 
         const model =
             await loadOccupancyModel();
-
-
-        if (status) {
-
-            status.textContent =
-                "Starting camera...";
-        }
 
 
         const video =
@@ -3098,28 +6082,53 @@ async function startSmartOccupancy() {
             $("#occupancyCameraCanvas");
 
 
-        $("#occupancyState").textContent =
-            "Active";
+        if (state) {
+
+            state.textContent =
+                "Active";
+        }
 
 
-        status.textContent =
-            "Detecting people...";
+        if (status) {
+
+            status.innerHTML = `
+
+                <div class="inline-status success">
+
+                    <span
+                        class="inline-status-icon"
+                    >
+                        ●
+                    </span>
+
+                    <span>
+                        Live classroom detection active.
+                    </span>
+
+                </div>
+
+            `;
+        }
 
 
         occupancyTimer =
             setInterval(
+
                 async () => {
 
                     if (
                         occupancyBusy ||
+                        !cameraStream ||
                         !video ||
                         video.readyState < 2
                     ) {
+
                         return;
                     }
 
 
-                    occupancyBusy = true;
+                    occupancyBusy =
+                        true;
 
 
                     try {
@@ -3148,82 +6157,105 @@ async function startSmartOccupancy() {
                             $("#occupancyCount");
 
 
-                        if (countElement) {
+                        if (
+                            countElement
+                        ) {
+
                             countElement.textContent =
                                 count;
                         }
 
 
-                        prepareCanvas(
-                            canvas,
-                            video
-                        );
+                        if (
+                            canvas
+                        ) {
 
-
-                        const ctx =
-                            canvas.getContext(
-                                "2d"
+                            prepareCanvas(
+                                canvas,
+                                video
                             );
 
 
-                        ctx.clearRect(
-                            0,
-                            0,
-                            canvas.width,
-                            canvas.height
-                        );
-
-
-                        people.forEach(
-                            (
-                                person,
-                                index
-                            ) => {
-
-                                const [
-                                    x,
-                                    y,
-                                    width,
-                                    height
-                                ] =
-                                    person.bbox;
-
-
-                                drawOccupancyBox(
-                                    ctx,
-                                    x,
-                                    y,
-                                    width,
-                                    height,
-                                    index + 1,
-                                    person.score
+                            const context =
+                                canvas.getContext(
+                                    "2d"
                                 );
-                            }
-                        );
+
+
+                            context.clearRect(
+                                0,
+                                0,
+                                canvas.width,
+                                canvas.height
+                            );
+
+
+                            people.forEach(
+                                (
+                                    person,
+                                    index
+                                ) => {
+
+                                    const [
+                                        x,
+                                        y,
+                                        width,
+                                        height
+                                    ] =
+                                        person.bbox;
+
+
+                                    drawOccupancyBox(
+
+                                        context,
+
+                                        x,
+                                        y,
+                                        width,
+                                        height,
+
+                                        index + 1,
+
+                                        person.score
+                                    );
+                                }
+                            );
+                        }
 
 
                         if (status) {
 
                             status.innerHTML = `
 
-                                <span
-                                    style="
-                                    color:#4ade80;
-                                    font-weight:bold;
-                                    "
+                                <div
+                                    class="inline-status success"
                                 >
-                                    ● Live Detection
-                                </span>
 
-                                <br>
+                                    <span
+                                        class="inline-status-icon"
+                                    >
+                                        ●
+                                    </span>
 
-                                ${count}
-                                ${
-                                    count === 1
-                                        ? "person"
-                                        : "people"
-                                }
-                                detected.
+                                    <span>
+
+                                        <b>
+                                            Live Detection
+                                        </b>
+
+                                        <br>
+
+                                        ${safe(count)}
+                                        ${
+                                            count === 1
+                                                ? "person"
+                                                : "people"
+                                        }
+                                        detected.
+
+                                    </span>
+
+                                </div>
 
                             `;
                         }
@@ -3233,6 +6265,7 @@ async function startSmartOccupancy() {
                     catch (error) {
 
                         console.error(
+                            "Occupancy detection error:",
                             error
                         );
 
@@ -3246,24 +6279,24 @@ async function startSmartOccupancy() {
 
                 },
 
-                700
+                750
             );
 
     }
 
     catch (error) {
 
-        console.error(error);
+        console.error(
+            error
+        );
+
 
         stopCamera();
 
 
-        if (
-            $("#occupancyState")
-        ) {
+        if (state) {
 
-            $("#occupancyState")
-                .textContent =
+            state.textContent =
                 "Error";
         }
 
@@ -3272,20 +6305,32 @@ async function startSmartOccupancy() {
 
             status.innerHTML = `
 
-                <span
-                    style="
-                    color:#ff6b7a;
-                    font-weight:bold;
-                    "
-                >
-                    ${safe(
-                        error.message ||
-                        "Smart Occupancy could not start."
-                    )}
-                </span>
+                <div class="inline-status error">
+
+                    <span
+                        class="inline-status-icon"
+                    >
+                        !
+                    </span>
+
+                    <span>
+                        ${safe(
+                            error?.message ||
+                            "Smart Occupancy could not start."
+                        )}
+                    </span>
+
+                </div>
 
             `;
         }
+
+
+        showToast(
+            error?.message ||
+            "Smart Occupancy could not start.",
+            "error"
+        );
     }
 }
 
@@ -3295,7 +6340,7 @@ async function startSmartOccupancy() {
 ========================================================= */
 
 function drawOccupancyBox(
-    ctx,
+    context,
     x,
     y,
     width,
@@ -3304,18 +6349,23 @@ function drawOccupancyBox(
     score
 ) {
 
+    if (!context) {
+        return;
+    }
+
+
     const colour =
         "#4ade80";
 
 
-    ctx.strokeStyle =
+    context.strokeStyle =
         colour;
 
-    ctx.lineWidth =
+    context.lineWidth =
         4;
 
 
-    ctx.strokeRect(
+    context.strokeRect(
         x,
         y,
         width,
@@ -3333,12 +6383,12 @@ function drawOccupancyBox(
         `Person ${number} • ${confidence}%`;
 
 
-    ctx.font =
+    context.font =
         "bold 18px Arial";
 
 
     const labelWidth =
-        ctx.measureText(
+        context.measureText(
             label
         ).width + 18;
 
@@ -3350,11 +6400,11 @@ function drawOccupancyBox(
         );
 
 
-    ctx.fillStyle =
+    context.fillStyle =
         colour;
 
 
-    ctx.fillRect(
+    context.fillRect(
         x,
         labelY,
         labelWidth,
@@ -3362,11 +6412,11 @@ function drawOccupancyBox(
     );
 
 
-    ctx.fillStyle =
+    context.fillStyle =
         "#06101d";
 
 
-    ctx.fillText(
+    context.fillText(
         label,
         x + 9,
         labelY + 21
@@ -3375,7 +6425,7 @@ function drawOccupancyBox(
 
 
 /* =========================================================
-   STOP OCCUPANCY
+   STOP SMART OCCUPANCY
 ========================================================= */
 
 function stopSmartOccupancy() {
@@ -3386,19 +6436,48 @@ function stopSmartOccupancy() {
     const state =
         $("#occupancyState");
 
+
     const status =
         $("#occupancyStatus");
 
 
+    const count =
+        $("#occupancyCount");
+
+
     if (state) {
+
         state.textContent =
             "Off";
     }
 
 
+    if (count) {
+
+        count.textContent =
+            "0";
+    }
+
+
     if (status) {
-        status.textContent =
-            "Camera stopped.";
+
+        status.innerHTML = `
+
+            <div class="inline-status info">
+
+                <span
+                    class="inline-status-icon"
+                >
+                    i
+                </span>
+
+                <span>
+                    Camera stopped.
+                </span>
+
+            </div>
+
+        `;
     }
 }
 
@@ -3409,7 +6488,28 @@ function stopSmartOccupancy() {
 
 async function reportsPage() {
 
-    const result =
+    if (!db) {
+
+        throw new Error(
+            "Database is not configured."
+        );
+    }
+
+
+    if (
+        !S?.school
+    ) {
+
+        throw new Error(
+            "School information is missing."
+        );
+    }
+
+
+    const {
+        data,
+        error
+    } =
         await db
             .from("attendance")
             .select("*")
@@ -3420,91 +6520,342 @@ async function reportsPage() {
             .order(
                 "attendance_date",
                 {
-                    ascending: false
+                    ascending:
+                        false
                 }
             )
-            .limit(200);
+            .order(
+                "created_at",
+                {
+                    ascending:
+                        false
+                }
+            )
+            .limit(
+                500
+            );
 
 
-    if (result.error) {
-        throw result.error;
+    if (error) {
+        throw error;
     }
 
 
     const records =
-        result.data || [];
+        Array.isArray(data)
+            ? data
+            : [];
+
+
+    const today =
+        localDate();
+
+
+    const todayRecords =
+        records.filter(
+            record =>
+                record.attendance_date ===
+                today
+        );
+
+
+    const presentToday =
+        todayRecords.filter(
+            record =>
+                record.status ===
+                "Present"
+        ).length;
+
+
+    const lateToday =
+        todayRecords.filter(
+            record =>
+                record.status ===
+                "Late"
+        ).length;
 
 
     $("#page").innerHTML = `
 
-        <div class="box">
+        ${stats([
 
-            <h3>
-                Attendance Reports
-            </h3>
+            [
+                "Records",
+                records.length
+            ],
 
-            <p class="muted">
-                Recent attendance records.
-            </p>
+            [
+                "Marked Today",
+                todayRecords.length
+            ],
+
+            [
+                "Present Today",
+                presentToday
+            ],
+
+            [
+                "Late Today",
+                lateToday
+            ]
+
+        ])}
+
+
+        <div
+            class="box"
+            style="margin-top:18px"
+        >
+
+            <div
+                style="
+                    display:flex;
+                    justify-content:space-between;
+                    align-items:center;
+                    gap:15px;
+                    flex-wrap:wrap;
+                "
+            >
+
+                <div>
+
+                    <h3>
+                        Attendance Reports
+                    </h3>
+
+                    <p class="muted">
+                        Search or export recent
+                        attendance records.
+                    </p>
+
+                </div>
+
+
+                <button
+                    class="no-zoom"
+                    onclick="exportAttendanceReport()"
+                >
+                    Export CSV
+                </button>
+
+            </div>
+
+
+            ${renderSearchBar(
+                "reportSearch",
+                "Search student, class, date or status..."
+            )}
+
+
+            ${
+                records.length
+
+                    ? `
+
+                    <div
+                        class="table"
+                        id="reportsTable"
+                    >
+
+                        <table>
+
+                            <thead>
+
+                                <tr>
+
+                                    <th>
+                                        Date
+                                    </th>
+
+                                    <th>
+                                        Time
+                                    </th>
+
+                                    <th>
+                                        Student
+                                    </th>
+
+                                    <th>
+                                        ID
+                                    </th>
+
+                                    <th>
+                                        Class
+                                    </th>
+
+                                    <th>
+                                        Status
+                                    </th>
+
+                                </tr>
+
+                            </thead>
+
+
+                            <tbody>
+
+                                ${records.map(
+                                    record => `
+
+                                        <tr
+                                            data-search-item
+                                        >
+
+                                            <td>
+                                                ${safe(
+                                                    record.attendance_date
+                                                )}
+                                            </td>
+
+                                            <td>
+                                                ${safe(
+                                                    record.attendance_time ||
+                                                    "-"
+                                                )}
+                                            </td>
+
+                                            <td>
+                                                <b>
+                                                    ${safe(
+                                                        record.name
+                                                    )}
+                                                </b>
+                                            </td>
+
+                                            <td>
+                                                ${safe(
+                                                    record.student_id
+                                                )}
+                                            </td>
+
+                                            <td>
+                                                ${safe(
+                                                    record.class_name
+                                                )}
+                                            </td>
+
+                                            <td>
+
+                                                ${
+                                                    record.status ===
+                                                    "Present"
+
+                                                        ? `
+
+                                                        <span
+                                                            style="
+                                                                color:#5ad4a4;
+                                                                font-weight:700;
+                                                            "
+                                                        >
+                                                            Present
+                                                        </span>
+
+                                                        `
+
+                                                        : safe(
+                                                            record.status
+                                                        )
+                                                }
+
+                                            </td>
+
+                                        </tr>
+
+                                    `
+                                ).join("")}
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
+
+                    `
+
+                    :
+
+                    emptyState(
+                        "No attendance records",
+                        "Attendance records will appear here after students are marked."
+                    )
+            }
 
         </div>
 
-
-        <div class="table">
-
-            <table>
-
-                <tr>
-                    <th>Date</th>
-                    <th>Time</th>
-                    <th>Student</th>
-                    <th>Class</th>
-                    <th>Status</th>
-                </tr>
-
-
-                ${records.map(record => `
-
-                    <tr>
-
-                        <td>
-                            ${safe(
-                                record.attendance_date
-                            )}
-                        </td>
-
-                        <td>
-                            ${safe(
-                                record.attendance_time || ""
-                            )}
-                        </td>
-
-                        <td>
-                            ${safe(
-                                record.name
-                            )}
-                        </td>
-
-                        <td>
-                            ${safe(
-                                record.class_name
-                            )}
-                        </td>
-
-                        <td>
-                            ${safe(
-                                record.status
-                            )}
-                        </td>
-
-                    </tr>
-
-                `).join("")}
-
-            </table>
-
-        </div>
     `;
+
+
+    /*
+        Keep the data temporarily available
+        for the export button.
+    */
+
+    window.eduvisionReportRows =
+        records;
+
+
+    bindSimpleSearch(
+        "reportSearch",
+        "#reportsTable"
+    );
+}
+
+
+/* =========================================================
+   EXPORT ATTENDANCE REPORT
+========================================================= */
+
+function exportAttendanceReport() {
+
+    const records =
+        Array.isArray(
+            window.eduvisionReportRows
+        )
+
+            ? window.eduvisionReportRows
+
+            : [];
+
+
+    const exportRows =
+        records.map(
+            record => ({
+
+                Date:
+                    record.attendance_date ||
+                    "",
+
+                Time:
+                    record.attendance_time ||
+                    "",
+
+                Student_ID:
+                    record.student_id ||
+                    "",
+
+                Student:
+                    record.name ||
+                    "",
+
+                Class:
+                    record.class_name ||
+                    "",
+
+                Status:
+                    record.status ||
+                    ""
+
+            })
+        );
+
+
+    exportCsvRows(
+
+        exportRows,
+
+        `EduVision-Attendance-${localDate()}.csv`
+    );
 }
 
 
@@ -3514,6 +6865,28 @@ async function reportsPage() {
 
 function settingsPage() {
 
+    if (
+        S.role !==
+        "School Admin"
+    ) {
+
+        $("#page").innerHTML = `
+
+            <div class="box">
+
+                ${emptyState(
+                    "Access Restricted",
+                    "Only the School Admin can access school settings."
+                )}
+
+            </div>
+
+        `;
+
+        return;
+    }
+
+
     $("#page").innerHTML = `
 
         <div class="box">
@@ -3522,12 +6895,16 @@ function settingsPage() {
                 School Settings
             </h3>
 
+
             <p class="muted">
-                School ID
+                Current School ID
             </p>
 
+
             <b>
-                ${safe(S.school)}
+                ${safe(
+                    S.school
+                )}
             </b>
 
         </div>
@@ -3535,29 +6912,98 @@ function settingsPage() {
 
         <div
             class="box"
-            style="margin-top:15px"
+            style="margin-top:18px"
+        >
+
+            <h3>
+                Signed In As
+            </h3>
+
+
+            <p>
+                <b>
+                    ${safe(
+                        S.name
+                    )}
+                </b>
+            </p>
+
+
+            <p class="muted">
+                ${safe(
+                    S.role
+                )}
+            </p>
+
+        </div>
+
+
+        <div
+            class="box"
+            style="margin-top:18px"
         >
 
             <h3>
                 EduVision
             </h3>
 
+
             <p class="muted">
-                Smart classroom attendance,
-                occupancy monitoring and
-                classroom management.
+                Smarter classrooms through
+                fast attendance, classroom
+                monitoring and simple management.
             </p>
 
+
+            <div
+                class="inline-status success"
+            >
+
+                <span
+                    class="inline-status-icon"
+                >
+                    ●
+                </span>
+
+                <span>
+                    System Online
+                </span>
+
+            </div>
+
         </div>
+
     `;
 }
 
 
 /* =========================================================
-   EDUVISION ADMIN SCHOOLS
+   EDUVISION ADMIN — SCHOOLS
 ========================================================= */
 
 async function schoolsPage() {
+
+    if (
+        S.role !==
+        "EduVision Admin"
+    ) {
+
+        $("#page").innerHTML = `
+
+            <div class="box">
+
+                ${emptyState(
+                    "Access Restricted",
+                    "EduVision Admin access is required."
+                )}
+
+            </div>
+
+        `;
+
+        return;
+    }
+
 
     if (!db) {
 
@@ -3567,6 +7013,20 @@ async function schoolsPage() {
     }
 
 
+    /*
+        IMPORTANT:
+        We intentionally do NOT use:
+
+            const { data = [] }
+
+        because Supabase may return
+        data: null when a request fails.
+
+        This prevents the old endless
+        Loading... problem.
+    */
+
+
     const result =
         await db
             .from("schools")
@@ -3574,124 +7034,285 @@ async function schoolsPage() {
             .order(
                 "created_at",
                 {
-                    ascending: false
+                    ascending:
+                        false
                 }
             );
 
 
-    if (result.error) {
+    if (
+        result.error
+    ) {
+
         throw result.error;
     }
 
 
     const schools =
-        result.data || [];
+        Array.isArray(
+            result.data
+        )
+
+            ? result.data
+
+            : [];
+
+
+    const pending =
+        schools.filter(
+            school =>
+                school.approval_status ===
+                "Pending"
+        ).length;
+
+
+    const approved =
+        schools.filter(
+            school =>
+                school.approval_status ===
+                "Approved"
+        ).length;
 
 
     $("#page").innerHTML = `
 
-        <div class="box">
+        ${stats([
+
+            [
+                "Pending",
+                pending
+            ],
+
+            [
+                "Approved",
+                approved
+            ],
+
+            [
+                "Total Schools",
+                schools.length
+            ],
+
+            [
+                "System",
+                "Online"
+            ]
+
+        ])}
+
+
+        <div
+            class="box"
+            style="margin-top:18px"
+        >
 
             <h3>
                 School Registrations
             </h3>
 
+
             <p class="muted">
-                Review and manage schools
-                requesting access to EduVision.
+                Review schools requesting
+                access to EduVision.
             </p>
 
-        </div>
+
+            ${renderSearchBar(
+                "schoolSearch",
+                "Search school, ID, admin or status..."
+            )}
 
 
-        <div class="table">
+            ${
+                schools.length
 
-            <table>
+                    ? `
 
-                <tr>
-                    <th>School ID</th>
-                    <th>School</th>
-                    <th>Admin ID</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                </tr>
+                    <div
+                        class="table"
+                        id="schoolsTable"
+                    >
+
+                        <table>
+
+                            <thead>
+
+                                <tr>
+
+                                    <th>
+                                        School ID
+                                    </th>
+
+                                    <th>
+                                        School
+                                    </th>
+
+                                    <th>
+                                        Admin ID
+                                    </th>
+
+                                    <th>
+                                        Status
+                                    </th>
+
+                                    <th>
+                                        Action
+                                    </th>
+
+                                </tr>
+
+                            </thead>
 
 
-                ${schools.length
+                            <tbody>
 
-                    ? schools.map(school => `
+                                ${schools.map(
+                                    school => `
 
-                        <tr>
+                                        <tr
+                                            data-search-item
+                                        >
 
-                            <td>
-                                ${safe(
-                                    school.school_id
-                                )}
-                            </td>
+                                            <td>
+                                                ${safe(
+                                                    school.school_id
+                                                )}
+                                            </td>
 
-                            <td>
-                                ${safe(
-                                    school.school_name
-                                )}
-                            </td>
 
-                            <td>
-                                ${safe(
-                                    school.admin_id
-                                )}
-                            </td>
+                                            <td>
+                                                <b>
+                                                    ${safe(
+                                                        school.school_name
+                                                    )}
+                                                </b>
+                                            </td>
 
-                            <td>
-                                ${safe(
-                                    school.approval_status
-                                )}
-                            </td>
 
-                            <td>
+                                            <td>
+                                                ${safe(
+                                                    school.admin_id
+                                                )}
+                                            </td>
 
-                                <button
-                                    onclick="setSchoolStatus(
-                                        '${safe(
-                                            school.school_id
-                                        )}',
-                                        'Approved'
-                                    )"
-                                >
-                                    Approve
-                                </button>
 
-                                <button
-                                    onclick="setSchoolStatus(
-                                        '${safe(
-                                            school.school_id
-                                        )}',
-                                        'Rejected'
-                                    )"
-                                >
-                                    Reject
-                                </button>
+                                            <td>
 
-                            </td>
+                                                ${
+                                                    school.approval_status ===
+                                                    "Approved"
 
-                        </tr>
+                                                        ? `
 
-                    `).join("")
+                                                        <span
+                                                            style="
+                                                                color:#5ad4a4;
+                                                                font-weight:700;
+                                                            "
+                                                        >
+                                                            ● Approved
+                                                        </span>
 
-                    : `
+                                                        `
 
-                    <tr>
-                        <td colspan="5">
-                            No schools found.
-                        </td>
-                    </tr>
+                                                        :
+
+                                                    school.approval_status ===
+                                                    "Rejected"
+
+                                                        ? `
+
+                                                        <span
+                                                            style="
+                                                                color:#ff7d8d;
+                                                                font-weight:700;
+                                                            "
+                                                        >
+                                                            ● Rejected
+                                                        </span>
+
+                                                        `
+
+                                                        : `
+
+                                                        <span
+                                                            style="
+                                                                color:#f7c76b;
+                                                                font-weight:700;
+                                                            "
+                                                        >
+                                                            ● Pending
+                                                        </span>
+
+                                                        `
+                                                }
+
+                                            </td>
+
+
+                                            <td>
+
+                                                <div class="tools">
+
+                                                    <button
+                                                        class="small-button no-zoom"
+                                                        onclick="setSchoolStatus(
+                                                            '${safe(
+                                                                school.school_id
+                                                            )}',
+                                                            'Approved'
+                                                        )"
+                                                    >
+                                                        Approve
+                                                    </button>
+
+
+                                                    <button
+                                                        class="small-button secondary-button no-zoom"
+                                                        onclick="setSchoolStatus(
+                                                            '${safe(
+                                                                school.school_id
+                                                            )}',
+                                                            'Rejected'
+                                                        )"
+                                                    >
+                                                        Reject
+                                                    </button>
+
+                                                </div>
+
+                                            </td>
+
+                                        </tr>
+
+                                    `
+                                ).join("")}
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
 
                     `
-                }
 
-            </table>
+                    :
+
+                    emptyState(
+                        "No schools found",
+                        "New school registration requests will appear here."
+                    )
+            }
 
         </div>
+
     `;
+
+
+    bindSimpleSearch(
+        "schoolSearch",
+        "#schoolsTable"
+    );
 }
 
 
@@ -3704,37 +7325,68 @@ async function setSchoolStatus(
     status
 ) {
 
+    if (
+        S.role !==
+        "EduVision Admin"
+    ) {
+
+        return;
+    }
+
+
     try {
+
+        const update = {
+
+            approval_status:
+                status,
+
+            approved_at:
+                status ===
+                "Approved"
+
+                    ? new Date()
+                        .toISOString()
+
+                    : null,
+
+            approved_by:
+                "EduVision Admin"
+        };
+
 
         const result =
             await db
                 .from("schools")
-                .update({
-
-                    approval_status:
-                        status,
-
-                    approved_at:
-                        status ===
-                        "Approved"
-
-                            ? new Date()
-                                .toISOString()
-
-                            : null,
-
-                    approved_by:
-                        "EduVision Admin"
-                })
+                .update(
+                    update
+                )
                 .eq(
                     "school_id",
                     schoolId
                 );
 
 
-        if (result.error) {
+        if (
+            result.error
+        ) {
+
             throw result.error;
         }
+
+
+        showToast(
+
+            status === "Approved"
+
+                ? "School approved."
+
+                : "School rejected.",
+
+            status === "Approved"
+                ? "success"
+                : "info"
+        );
 
 
         await schoolsPage();
@@ -3743,9 +7395,15 @@ async function setSchoolStatus(
 
     catch (error) {
 
-        alert(
-            error.message ||
-            "Could not update school."
+        console.error(
+            error
+        );
+
+
+        showToast(
+            error?.message ||
+            "Could not update school.",
+            "error"
         );
     }
 }
@@ -3755,29 +7413,101 @@ async function setSchoolStatus(
    STARTUP
 ========================================================= */
 
+function initBootState() {
+
+    initUiLayer();
+
+
+    /*
+        Existing login session.
+    */
+
+    if (
+        S &&
+        S.role
+    ) {
+
+        start(
+            S
+        );
+
+        return;
+    }
+
+
+    /*
+        New visitor.
+    */
+
+    S =
+        null;
+
+
+    localStorage.removeItem(
+        "evs"
+    );
+
+
+    showView(
+        "home"
+    );
+}
+
+
+/* =========================================================
+   STOP CAMERA WHEN TAB / PAGE CLOSES
+========================================================= */
+
+window.addEventListener(
+    "beforeunload",
+    () => {
+
+        stopCamera();
+    }
+);
+
+
+/* =========================================================
+   ESC KEY
+========================================================= */
+
+document.addEventListener(
+    "keydown",
+    event => {
+
+        if (
+            event.key !==
+            "Escape"
+        ) {
+
+            return;
+        }
+
+
+        if (
+            cameraStream
+        ) {
+
+            stopCamera();
+
+
+            showToast(
+                "Camera stopped.",
+                "info"
+            );
+        }
+    }
+);
+
+
+/* =========================================================
+   BOOT
+========================================================= */
+
 document.addEventListener(
     "DOMContentLoaded",
     () => {
 
-        if (S) {
-
-            start(S);
-
-        }
-
-        else {
-
-            $("#app").classList.add(
-                "hidden"
-            );
-
-            $("#login").classList.add(
-                "hidden"
-            );
-
-            $("#home").classList.remove(
-                "hidden"
-            );
-        }
+        initBootState();
     }
 );
