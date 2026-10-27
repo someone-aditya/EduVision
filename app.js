@@ -955,125 +955,175 @@ async function page(name) {
 
 async function dashboardPage() {
 
-    if (
-        S.role ===
-        "EduVision Admin"
-    ) {
+    try {
 
-        const pending =
-            await countRows(
-                "schools",
-                "approval_status",
-                "Pending"
-            );
+        /* =====================================
+           EDUVISION ADMIN DASHBOARD
+        ===================================== */
 
-        const approved =
-            await countRows(
-                "schools",
-                "approval_status",
-                "Approved"
-            );
+        if (S.role === "EduVision Admin") {
+
+            if (!db) {
+                throw new Error(
+                    "Database connection is not available."
+                );
+            }
+
+            const result = await db
+                .from("schools")
+                .select("school_id, approval_status");
 
 
-        $("#page").innerHTML =
-            stats([
-                [
-                    "Pending Schools",
-                    pending
-                ],
-                [
-                    "Approved Schools",
-                    approved
-                ],
-                [
-                    "Platform",
-                    "Online"
-                ],
-                [
-                    "Role",
-                    "Admin"
-                ]
+            if (result.error) {
+                throw result.error;
+            }
+
+
+            const schools = result.data || [];
+
+
+            const pending = schools.filter(
+                school =>
+                    school.approval_status === "Pending"
+            ).length;
+
+
+            const approved = schools.filter(
+                school =>
+                    school.approval_status === "Approved"
+            ).length;
+
+
+            $("#page").innerHTML = stats([
+                ["Pending Schools", pending],
+                ["Approved Schools", approved],
+                ["Total Schools", schools.length],
+                ["System", "Online"]
             ]);
 
-        return;
-    }
+            return;
+        }
 
 
-    const today =
-        localDate();
+        /* =====================================
+           SCHOOL / TEACHER DASHBOARD
+        ===================================== */
+
+        if (!db) {
+            throw new Error(
+                "Database connection is not available."
+            );
+        }
 
 
-    const students =
-        await countRows(
-            "students",
-            "status",
-            "Active"
-        );
+        const today = localDate();
 
 
-    const teachers =
-        await countRows(
-            "teachers",
-            "enabled",
-            true
-        );
+        const studentsResult = await db
+            .from("students")
+            .select("*", {
+                count: "exact",
+                head: true
+            })
+            .eq("school_id", S.school)
+            .eq("status", "Active");
 
 
-    const attendance =
-        await countRows(
-            "attendance",
-            "attendance_date",
-            today
-        );
+        if (studentsResult.error) {
+            throw studentsResult.error;
+        }
 
 
-    $("#page").innerHTML =
-        stats([
+        const teachersResult = await db
+            .from("teachers")
+            .select("*", {
+                count: "exact",
+                head: true
+            })
+            .eq("school_id", S.school)
+            .eq("enabled", true);
+
+
+        if (teachersResult.error) {
+            throw teachersResult.error;
+        }
+
+
+        const attendanceResult = await db
+            .from("attendance")
+            .select("*", {
+                count: "exact",
+                head: true
+            })
+            .eq("school_id", S.school)
+            .eq("attendance_date", today);
+
+
+        if (attendanceResult.error) {
+            throw attendanceResult.error;
+        }
+
+
+        $("#page").innerHTML = stats([
+
             [
                 "Active Students",
-                students
+                studentsResult.count || 0
             ],
+
             [
                 "Teachers",
-                teachers
+                teachersResult.count || 0
             ],
+
             [
                 "Marked Today",
-                attendance
+                attendanceResult.count || 0
             ],
+
             [
                 "System",
                 "Online"
             ]
+
         ]);
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "Dashboard error:",
+            error
+        );
+
+
+        $("#page").innerHTML = `
+
+            <div class="box">
+
+                <h3>
+                    Dashboard could not load
+                </h3>
+
+                <p class="muted">
+                    ${safe(
+                        error?.message ||
+                        "Database connection failed."
+                    )}
+                </p>
+
+                <button
+                    onclick="page('Dashboard')"
+                >
+                    Try Again
+                </button>
+
+            </div>
+
+        `;
+    }
 }
-
-
-function stats(items) {
-
-    return `
-        <div class="stats">
-
-            ${items.map(item => `
-
-                <div class="box">
-
-                    <span class="muted">
-                        ${safe(item[0])}
-                    </span>
-
-                    <b>
-                        ${safe(item[1])}
-                    </b>
-
-                </div>
-
-            `).join("")}
-
-        </div>
-    `;
-}
-
 
 /* =========================================================
    LOCAL DATE
