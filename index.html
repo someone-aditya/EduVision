@@ -27,7 +27,7 @@
 
 <main id="home">
 
-    <div class="hero">
+    <div class="hero zoom-panel">
 
         <div class="eyebrow">
             AI • SMART CLASSROOM
@@ -45,28 +45,16 @@
         </p>
 
 
-        <div class="tools">
+        <div class="cta-row">
 
-            <button onclick="login('admin')">
-                School Admin
-            </button>
-
-
-            <button onclick="login('teacher')">
-                Teacher Login
-            </button>
-
-
-            <button onclick="login('register')">
-                Register School
+            <button
+                class="primary-action no-zoom"
+                onclick="showSelection()"
+            >
+                Get Started
             </button>
 
         </div>
-
-
-        <button onclick="login('evadmin')">
-            EduVision Admin
-        </button>
 
 
         <p class="muted">
@@ -80,7 +68,132 @@
 
 
 <!-- =========================================
-     LOGIN
+     PORTAL SELECTION
+========================================= -->
+
+<section
+    id="selection"
+    class="hidden"
+>
+
+    <div class="selection-card zoom-panel">
+
+        <div class="eyebrow">
+            SELECT ACCESS
+        </div>
+
+
+        <h2>
+            Choose Your Portal
+        </h2>
+
+
+        <p class="muted">
+            Select how you want to access EduVision.
+        </p>
+
+
+        <div class="selection-list">
+
+
+            <!-- SCHOOL ADMIN -->
+
+            <button
+                class="selection-button"
+                onclick="login('admin')"
+            >
+
+                <span class="selection-label">
+                    School Admin
+                </span>
+
+                <small>
+                    Manage students, teachers and attendance
+                </small>
+
+            </button>
+
+
+
+            <!-- TEACHER -->
+
+            <button
+                class="selection-button"
+                onclick="login('teacher')"
+            >
+
+                <span class="selection-label">
+                    Teacher Login
+                </span>
+
+                <small>
+                    Attendance and classroom management
+                </small>
+
+            </button>
+
+
+
+            <!-- REGISTER SCHOOL -->
+
+            <button
+                class="selection-button"
+                onclick="login('register')"
+            >
+
+                <span class="selection-label">
+                    Register School
+                </span>
+
+                <small>
+                    Request access to EduVision
+                </small>
+
+            </button>
+
+
+
+            <!-- EDUVISION ADMIN -->
+
+            <button
+                class="secondary-button no-zoom"
+                onclick="login('evadmin')"
+            >
+
+                <span class="selection-label">
+                    EduVision Admin
+                </span>
+
+                <small>
+                    Review and manage registered schools
+                </small>
+
+            </button>
+
+
+        </div>
+
+
+        <button
+            class="secondary-button no-zoom"
+            onclick="goHome()"
+        >
+            ← Back to Home
+        </button>
+
+
+        <p class="muted">
+            ● System Online
+        </p>
+
+    </div>
+
+</section>
+
+
+
+<!-- =========================================
+     LOGIN / REGISTRATION
 ========================================= -->
 
 <section
@@ -88,9 +201,13 @@
     class="hidden"
 >
 
-    <div class="card">
+    <div class="card zoom-panel">
 
-        <button onclick="goHome()">
+
+        <button
+            class="no-zoom"
+            onclick="showSelection()"
+        >
             ← Back
         </button>
 
@@ -105,6 +222,7 @@
 
         <p id="msg"></p>
 
+
     </div>
 
 </section>
@@ -112,7 +230,7 @@
 
 
 <!-- =========================================
-     APPLICATION
+     EDUVISION APPLICATION
 ========================================= -->
 
 <section
@@ -120,7 +238,11 @@
     class="hidden"
 >
 
+
+    <!-- SIDEBAR -->
+
     <aside>
+
 
         <h2>
             EduVision
@@ -133,14 +255,22 @@
         <nav id="nav"></nav>
 
 
-        <button onclick="logout()">
+        <button
+            class="no-zoom"
+            onclick="logout()"
+        >
             Log Out
         </button>
+
 
     </aside>
 
 
+
+    <!-- MAIN DASHBOARD -->
+
     <article>
+
 
         <small>
             AI • SMART CLASSROOM
@@ -154,7 +284,9 @@
 
         <div id="page"></div>
 
+
     </article>
+
 
 </section>
 
@@ -175,7 +307,7 @@
 ========================================= -->
 
 <script
-    src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js">
+    src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.js">
 </script>
 
 
@@ -191,7 +323,7 @@
 
 
 <!-- =========================================
-     SMART OCCUPANCY OBJECT DETECTION
+     SMART OCCUPANCY
 ========================================= -->
 
 <script
@@ -201,7 +333,7 @@
 
 
 <!-- =========================================
-     EDUVISION CONFIG
+     YOUR EXISTING SUPABASE CONFIG
 ========================================= -->
 
 <script src="/config.js"></script>
@@ -209,7 +341,7 @@
 
 
 <!-- =========================================
-     EDUVISION APPLICATION
+     EDUVISION APP
 ========================================= -->
 
 <script src="/app.js"></script>
