@@ -90,7 +90,7 @@
 
     <div class="card">
 
-        <button onclick="window.location.reload()">
+        <button onclick="goHome()">
             ← Back
         </button>
 
@@ -120,9 +120,6 @@
     class="hidden"
 >
 
-
-    <!-- SIDEBAR -->
-
     <aside>
 
         <h2>
@@ -143,11 +140,7 @@
     </aside>
 
 
-
-    <!-- MAIN AREA -->
-
     <article>
-
 
         <small>
             AI • SMART CLASSROOM
@@ -161,9 +154,7 @@
 
         <div id="page"></div>
 
-
     </article>
-
 
 </section>
 
@@ -190,6 +181,26 @@
 
 
 <!-- =========================================
+     TENSORFLOW.JS
+========================================= -->
+
+<script
+    src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js">
+</script>
+
+
+
+<!-- =========================================
+     SMART OCCUPANCY OBJECT DETECTION
+========================================= -->
+
+<script
+    src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js">
+</script>
+
+
+
+<!-- =========================================
      EDUVISION CONFIG
 ========================================= -->
 
@@ -198,7 +209,7 @@
 
 
 <!-- =========================================
-     MAIN APP
+     EDUVISION APPLICATION
 ========================================= -->
 
 <script src="/app.js"></script>
