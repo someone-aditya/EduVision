@@ -3108,9 +3108,8 @@ async function removeStudent(studentId, studentName) {
     }
 
     const confirmed = confirm(
-        `Are you sure you want to remove ${studentName}?\n\n` +
-        `Their Smart Attendance profile will also be removed.\n` +
-        `Previous attendance history will be kept.`
+        `Are you sure you want to permanently remove ${studentName}?\n\n` +
+        `This will also remove their face profile and all attendance records.`
     );
 
     if (!confirmed) {
@@ -3118,6 +3117,18 @@ async function removeStudent(studentId, studentName) {
     }
 
     try {
+
+        /* Delete all attendance records */
+        const attendanceResult = await db
+            .from("attendance")
+            .delete()
+            .eq("school_id", S.school)
+            .eq("student_id", studentId);
+
+        if (attendanceResult.error) {
+            throw attendanceResult.error;
+        }
+
 
         /* Delete Smart Attendance face profile */
         const faceResult = await db
@@ -3131,7 +3142,7 @@ async function removeStudent(studentId, studentName) {
         }
 
 
-        /* Delete student */
+        /* Delete student record */
         const studentResult = await db
             .from("students")
             .delete()
@@ -3144,9 +3155,10 @@ async function removeStudent(studentId, studentName) {
 
 
         showToast(
-            `${studentName} removed successfully.`,
+            `${studentName} and all related data were removed successfully.`,
             "success"
         );
+
 
         await studentsPage();
 
@@ -3157,7 +3169,8 @@ async function removeStudent(studentId, studentName) {
         console.error(error);
 
         showToast(
-            error?.message || "Could not remove student.",
+            error?.message ||
+            "Could not completely remove student.",
             "error"
         );
     }
