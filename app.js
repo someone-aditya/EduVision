@@ -2833,6 +2833,28 @@ async function studentsPage() {
                                                     }
 
                                                 </td>
+                                                                                                <td>
+
+                                                    ${
+                                                        S.role === "School Admin"
+                                                            ? `
+                                                                <button
+                                                                    class="small-button no-zoom"
+                                                                    onclick="removeStudent('${safe(student.student_id)}', '${safe(student.name)}')"
+                                                                    style="
+                                                                        border-color:#ff536c;
+                                                                        color:#ff7d8d;
+                                                                    "
+                                                                >
+                                                                    Remove
+                                                                </button>
+                                                            `
+                                                            : `
+                                                                <span class="muted">—</span>
+                                                            `
+                                                    }
+
+                                                </td>
 
                                             </tr>
 
@@ -3071,7 +3093,75 @@ async function addStudent() {
     }
 }
 
+/* =========================================================
+   REMOVE STUDENT
+========================================================= */
 
+async function removeStudent(studentId, studentName) {
+
+    if (S.role !== "School Admin") {
+        showToast(
+            "School Admin access required.",
+            "error"
+        );
+        return;
+    }
+
+    const confirmed = confirm(
+        `Are you sure you want to remove ${studentName}?\n\n` +
+        `Their Smart Attendance profile will also be removed.\n` +
+        `Previous attendance history will be kept.`
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+
+        /* Delete Smart Attendance face profile */
+        const faceResult = await db
+            .from("face_profiles")
+            .delete()
+            .eq("school_id", S.school)
+            .eq("student_id", studentId);
+
+        if (faceResult.error) {
+            throw faceResult.error;
+        }
+
+
+        /* Delete student */
+        const studentResult = await db
+            .from("students")
+            .delete()
+            .eq("school_id", S.school)
+            .eq("student_id", studentId);
+
+        if (studentResult.error) {
+            throw studentResult.error;
+        }
+
+
+        showToast(
+            `${studentName} removed successfully.`,
+            "success"
+        );
+
+        await studentsPage();
+
+    }
+
+    catch (error) {
+
+        console.error(error);
+
+        showToast(
+            error?.message || "Could not remove student.",
+            "error"
+        );
+    }
+}
 /* =========================================================
    FACE MODEL
 ========================================================= */
