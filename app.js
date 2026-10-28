@@ -2675,6 +2675,9 @@ async function studentsPage() {
                                     <th>
                                         Smart Attendance
                                     </th>
+                                    <th>
+                                         Action
+                                    </th>
 
                                 </tr>
 
