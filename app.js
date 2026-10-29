@@ -4951,9 +4951,7 @@ async function buildFaceMatcher() {
 
 async function startSmartAttendance() {
 
-    const status =
-        $("#faceStatus");
-
+    const status = $("#faceStatus");
 
     if (!status) {
         return;
@@ -4967,13 +4965,9 @@ async function startSmartAttendance() {
 
         status.innerHTML = `
 
-            <div
-                class="inline-status info"
-            >
+            <div class="inline-status info">
 
-                <span
-                    class="inline-status-icon"
-                >
+                <span class="inline-status-icon">
                     AI
                 </span>
 
@@ -4986,8 +4980,12 @@ async function startSmartAttendance() {
         `;
 
 
+        /* Load face recognition models */
+
         await loadFaceModels();
 
+
+        /* Build matcher from registered students */
 
         const matcher =
             await buildFaceMatcher();
@@ -4995,24 +4993,22 @@ async function startSmartAttendance() {
 
         status.innerHTML = `
 
-            <div
-                class="inline-status info"
-            >
+            <div class="inline-status info">
 
-                <span
-                    class="inline-status-icon"
-                >
+                <span class="inline-status-icon">
                     •
                 </span>
 
                 <span>
-                    Starting camera...
+                    Starting classroom camera...
                 </span>
 
             </div>
 
         `;
 
+
+        /* Start camera */
 
         const video =
             await openCamera(
@@ -5026,24 +5022,22 @@ async function startSmartAttendance() {
 
         status.innerHTML = `
 
-            <div
-                class="inline-status success"
-            >
+            <div class="inline-status success">
 
-                <span
-                    class="inline-status-icon"
-                >
+                <span class="inline-status-icon">
                     ●
                 </span>
 
                 <span>
-                    Scanning — one person at a time.
+                    Scanning classroom — multiple students supported.
                 </span>
 
             </div>
 
         `;
 
+
+        /* Start continuous classroom scanning */
 
         attendanceTimer =
             setInterval(
@@ -5060,11 +5054,14 @@ async function startSmartAttendance() {
                     }
 
 
-                    attendanceBusy =
-                        true;
+                    attendanceBusy = true;
 
 
                     try {
+
+                        /* =========================================
+                           DETECT ALL FACES
+                        ========================================= */
 
                         const detections =
                             await faceapi
@@ -5075,20 +5072,23 @@ async function startSmartAttendance() {
                                     new faceapi
                                         .TinyFaceDetectorOptions({
 
-                                            inputSize:
-                                                320,
+                                            inputSize: 320,
 
-                                            scoreThreshold:
-                                                0.5
+                                            scoreThreshold: 0.5
                                         })
                                 )
                                 .withFaceLandmarks()
                                 .withFaceDescriptors();
 
 
-                        if (
-                            canvas
-                        ) {
+                        /* =========================================
+                           PREPARE CAMERA CANVAS
+                        ========================================= */
+
+                        let context = null;
+
+
+                        if (canvas) {
 
                             prepareCanvas(
                                 canvas,
@@ -5096,7 +5096,7 @@ async function startSmartAttendance() {
                             );
 
 
-                            const context =
+                            context =
                                 canvas.getContext(
                                     "2d"
                                 );
@@ -5111,9 +5111,9 @@ async function startSmartAttendance() {
                         }
 
 
-                        /* -------------------------
-                           NO FACE
-                        ------------------------- */
+                        /* =========================================
+                           NO FACES
+                        ========================================= */
 
                         if (
                             detections.length === 0
@@ -5121,18 +5121,14 @@ async function startSmartAttendance() {
 
                             status.innerHTML = `
 
-                                <div
-                                    class="inline-status info"
-                                >
+                                <div class="inline-status info">
 
-                                    <span
-                                        class="inline-status-icon"
-                                    >
+                                    <span class="inline-status-icon">
                                         •
                                     </span>
 
                                     <span>
-                                        No face detected.
+                                        No faces detected.
                                     </span>
 
                                 </div>
@@ -5143,71 +5139,122 @@ async function startSmartAttendance() {
                         }
 
 
-                        /* -------------------------
-                           MULTIPLE FACES
-                        ------------------------- */
+                        /* =========================================
+                           MULTI-FACE RESULTS
+                        ========================================= */
 
-                        if (
-                            detections.length > 1
+                        let recognizedCount = 0;
+
+                        let unknownCount = 0;
+
+                        const recognizedNames = [];
+
+                        const processedStudents =
+                            new Set();
+
+
+                        /*
+                           Go through EVERY detected face instead
+                           of only detections[0].
+                        */
+
+                        for (
+                            const detection
+                            of detections
                         ) {
 
-                            status.innerHTML = `
+                            /* Find closest registered face */
 
-                                <div
-                                    class="inline-status error"
-                                >
-
-                                    <span
-                                        class="inline-status-icon"
-                                    >
-                                        !
-                                    </span>
-
-                                    <span>
-                                        ONE PERSON AT A TIME
-                                    </span>
-
-                                </div>
-
-                            `;
+                            const best =
+                                matcher.findBestMatch(
+                                    detection.descriptor
+                                );
 
 
-                            return;
-                        }
+                            const known =
+                                best.label !==
+                                "unknown";
 
 
-                        const detection =
-                            detections[0];
+                            /* =====================================
+                               UNKNOWN FACE
+                            ===================================== */
+
+                            if (!known) {
+
+                                unknownCount++;
 
 
-                        const best =
-                            matcher.findBestMatch(
-                                detection.descriptor
+                                if (context) {
+
+                                    drawDetectionBox(
+
+                                        context,
+
+                                        detection
+                                            .detection
+                                            .box,
+
+                                        "UNKNOWN",
+
+                                        "#ff536c"
+                                    );
+                                }
+
+
+                                continue;
+                            }
+
+
+                            /* =====================================
+                               RECOGNIZED STUDENT
+                            ===================================== */
+
+                            const parts =
+                                best.label.split(
+                                    "|"
+                                );
+
+
+                            const studentId =
+                                parts.shift();
+
+
+                            const studentName =
+                                parts.join("|");
+
+
+                            /*
+                               Prevent the same student being
+                               processed twice in one camera scan.
+                            */
+
+                            if (
+                                processedStudents.has(
+                                    studentId
+                                )
+                            ) {
+
+                                continue;
+                            }
+
+
+                            processedStudents.add(
+                                studentId
                             );
 
 
-                        const known =
-                            best.label !==
-                            "unknown";
+                            recognizedCount++;
 
 
-                        const context =
-                            canvas
-                                ? canvas.getContext(
-                                    "2d"
-                                )
-                                : null;
+                            recognizedNames.push(
+                                studentName
+                            );
 
 
-                        /* -------------------------
-                           UNKNOWN FACE
-                        ------------------------- */
+                            /* Green box around known student */
 
-                        if (!known) {
-
-                            if (
-                                context
-                            ) {
+                            if (context) {
 
                                 drawDetectionBox(
 
@@ -5217,22 +5264,119 @@ async function startSmartAttendance() {
                                         .detection
                                         .box,
 
-                                    "UNKNOWN",
+                                    studentName,
 
-                                    "#ff536c"
+                                    "#4ade80"
                                 );
                             }
 
 
+                            /* =====================================
+                               AUTOMATIC ATTENDANCE
+                            ===================================== */
+
+                            try {
+
+                                await saveAutomaticAttendance(
+                                    studentId,
+                                    studentName
+                                );
+
+                            }
+
+                            catch (
+                                attendanceError
+                            ) {
+
+                                console.error(
+                                    "Could not mark attendance for:",
+                                    studentName,
+                                    attendanceError
+                                );
+                            }
+                        }
+
+
+                        /* =========================================
+                           DISPLAY RESULTS
+                        ========================================= */
+
+                        if (
+                            recognizedCount > 0
+                        ) {
+
                             status.innerHTML = `
 
-                                <div
-                                    class="inline-status error"
-                                >
+                                <div class="inline-status success">
 
-                                    <span
-                                        class="inline-status-icon"
-                                    >
+                                    <span class="inline-status-icon">
+                                        ✓
+                                    </span>
+
+                                    <span>
+
+                                        <b>
+                                            ${safe(
+                                                recognizedCount
+                                            )}
+                                            student${
+                                                recognizedCount === 1
+                                                    ? ""
+                                                    : "s"
+                                            }
+                                            recognized
+                                        </b>
+
+                                        <br>
+
+                                        ${safe(
+                                            recognizedNames.join(
+                                                ", "
+                                            )
+                                        )}
+
+                                        ${
+                                            unknownCount > 0
+
+                                                ? `
+
+                                                <br>
+
+                                                <span class="muted">
+
+                                                    ${safe(
+                                                        unknownCount
+                                                    )}
+                                                    unknown face${
+                                                        unknownCount === 1
+                                                            ? ""
+                                                            : "s"
+                                                    }
+
+                                                </span>
+
+                                                `
+
+                                                : ""
+                                        }
+
+                                    </span>
+
+                                </div>
+
+                            `;
+
+                        }
+
+                        else {
+
+                            /* Faces exist but none are registered */
+
+                            status.innerHTML = `
+
+                                <div class="inline-status error">
+
+                                    <span class="inline-status-icon">
                                         !
                                     </span>
 
@@ -5244,6 +5388,16 @@ async function startSmartAttendance() {
 
                                         <br>
 
+                                        ${safe(
+                                            unknownCount
+                                        )}
+                                        unregistered face${
+                                            unknownCount === 1
+                                                ? ""
+                                                : "s"
+                                        }
+                                        detected.
+
                                         No attendance recorded.
 
                                     </span>
@@ -5251,84 +5405,7 @@ async function startSmartAttendance() {
                                 </div>
 
                             `;
-
-
-                            return;
                         }
-
-
-                        /* -------------------------
-                           KNOWN FACE
-                        ------------------------- */
-
-                        const parts =
-                            best.label.split(
-                                "|"
-                            );
-
-
-                        const studentId =
-                            parts.shift();
-
-
-                        const studentName =
-                            parts.join("|");
-
-
-                        if (
-                            context
-                        ) {
-
-                            drawDetectionBox(
-
-                                context,
-
-                                detection
-                                    .detection
-                                    .box,
-
-                                studentName,
-
-                                "#4ade80"
-                            );
-                        }
-
-
-                        status.innerHTML = `
-
-                            <div
-                                class="inline-status success"
-                            >
-
-                                <span
-                                    class="inline-status-icon"
-                                >
-                                    ✓
-                                </span>
-
-                                <span>
-
-                                    <b>
-                                        ${safe(
-                                            studentName
-                                        )}
-                                    </b>
-
-                                    <br>
-
-                                    Recognized.
-
-                                </span>
-
-                            </div>
-
-                        `;
-
-
-                        await saveAutomaticAttendance(
-                            studentId,
-                            studentName
-                        );
 
                     }
 
@@ -5343,8 +5420,7 @@ async function startSmartAttendance() {
 
                     finally {
 
-                        attendanceBusy =
-                            false;
+                        attendanceBusy = false;
                     }
 
                 },
@@ -5366,21 +5442,19 @@ async function startSmartAttendance() {
 
         status.innerHTML = `
 
-            <div
-                class="inline-status error"
-            >
+            <div class="inline-status error">
 
-                <span
-                    class="inline-status-icon"
-                >
+                <span class="inline-status-icon">
                     !
                 </span>
 
                 <span>
+
                     ${safe(
                         error?.message ||
                         "Smart Attendance could not start."
                     )}
+
                 </span>
 
             </div>
@@ -5389,8 +5463,10 @@ async function startSmartAttendance() {
 
 
         showToast(
+
             error?.message ||
             "Smart Attendance could not start.",
+
             "error"
         );
     }
